@@ -1,0 +1,83 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(
+    PQEProject
+    VERSION 0.1.0
+    DESCRIPTION "Parallel Query Execution Engine for Analytical Workloads"
+    LANGUAGES CXX
+)
+
+# Enforce C++20 standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Export compile commands for language servers
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# OpenMP Support
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found: Enabling multi-core parallelism")
+else()
+    message(WARNING "OpenMP not found: Proceeding with serial CPU execution only")
+endif()
+
+# Compiler Warnings Configuration
+set(COA_WARNING_FLAGS "")
+if(MSVC)
+    set(COA_WARNING_FLAGS /W4 /permissive-)
+else()
+    set(COA_WARNING_FLAGS 
+        -Wall 
+        -Wextra 
+        -Wpedantic 
+        -Wshadow 
+        -Wunused
+    )
+endif()
+
+# ==============================================================================
+# Layer 1: Storage Engine Library
+# ==============================================================================
+add_library(pqe_storage STATIC
+    src/layer1_storage/mmap_reader.cpp
+    src/layer1_storage/columnar_table.cpp
+    src/layer1_storage/morsel_allocator.cpp
+)
+
+target_include_directories(pqe_storage
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+
+target_compile_options(pqe_storage PRIVATE ${COA_WARNING_FLAGS})
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(pqe_storage PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+# ==============================================================================
+# Engine Executable & Verification CLI
+# ==============================================================================
+add_executable(coa_engine
+    src/main.cpp
+)
+
+target_include_directories(coa_engine
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_options(coa_engine PRIVATE ${COA_WARNING_FLAGS})
+target_link_libraries(coa_engine PRIVATE pqe_storage)
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(coa_engine PRIVATE OpenMP::OpenMP_CXX)
+endif()
