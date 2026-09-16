@@ -11,6 +11,8 @@ COA Project/
 ├── .gitignore
 ├── CMakeLists.txt
 ├── architecture_blueprint.md
+├── CHANGELOG.md
+├── README.md
 │
 ├── data/
 │   └── sample/
@@ -22,20 +24,34 @@ COA Project/
 │   └── pqe/
 │       ├── common/
 │       │   └── types.hpp
-│       └── layer1_storage/
-│           ├── columnar_table.hpp
-│           ├── mmap_reader.hpp
-│           └── morsel_allocator.hpp
+│       ├── layer1_storage/
+│       │   ├── columnar_table.hpp
+│       │   ├── mmap_reader.hpp
+│       │   └── morsel_allocator.hpp
+│       ├── layer3_execution/
+│       │   └── sequential/
+│       │       ├── seq_aggregator.hpp
+│       │       ├── seq_filter.hpp
+│       │       ├── seq_group_by.hpp
+│       │       └── seq_scan.hpp
+│       └── layer5_telemetry/
+│           └── telemetry.hpp
 │
 ├── scripts/
 │   └── generate_sales_data.py
 │
 └── src/
     ├── main.cpp
-    └── layer1_storage/
-        ├── columnar_table.cpp
-        ├── mmap_reader.cpp
-        └── morsel_allocator.cpp
+    ├── layer1_storage/
+    │   ├── columnar_table.cpp
+    │   ├── mmap_reader.cpp
+    │   └── morsel_allocator.cpp
+    └── layer3_execution/
+        └── sequential/
+            ├── seq_aggregator.cpp
+            ├── seq_filter.cpp
+            ├── seq_group_by.cpp
+            └── seq_scan.cpp
 ```
 
 ---
@@ -57,7 +73,16 @@ COA Project/
 | `src/layer1_storage/columnar_table.cpp` | C++20 Source | High-speed, zero-copy CSV parsing implementation converting raw byte buffers into typed columnar arrays using `std::from_chars`. |
 | `include/pqe/layer1_storage/morsel_allocator.hpp` | C++20 Header | Interface for the morsel partitioning engine providing thread-safe lock-free atomic chunk dispatching (`100,000` rows/chunk). |
 | `src/layer1_storage/morsel_allocator.cpp` | C++20 Source | Implementation of dataset chunking, boundary calculation, and lock-free cursor retrieval (`std::atomic<size_t>::fetch_add`). |
-| `src/main.cpp` | C++20 Source | Application entrypoint orchestrating CLI argument parsing, mmap ingestion, columnar memory loading, performance timing (`std::chrono`), and morsel allocation diagnostics. |
+| `include/pqe/layer3_execution/sequential/seq_scan.hpp` | C++20 Header | Single-threaded linear iterator traversing contiguous columnar memory vectors across entire tables or bounded morsels. |
+| `src/layer3_execution/sequential/seq_scan.cpp` | C++20 Source | Implementation of the sequential scan iterator and functional `for_each` row traversal. |
+| `include/pqe/layer3_execution/sequential/seq_filter.hpp` | C++20 Header | Declarations for predicate filtering operations producing dense row selection vectors (`std::vector<row_id_t>`). |
+| `src/layer3_execution/sequential/seq_filter.cpp` | C++20 Source | Optimized linear predicate evaluations for comparison operators (`Quantity > X`, `CategoryID == Y`, conjunctions). |
+| `include/pqe/layer3_execution/sequential/seq_aggregator.hpp` | C++20 Header | Single-pass scalar aggregation declarations for `COUNT()`, `SUM()`, `AVG()`, `MIN()`, and `MAX()`. |
+| `src/layer3_execution/sequential/seq_aggregator.cpp` | C++20 Source | Implementations of single-pass scalar metric accumulators with cache-conscious contiguous vector sweeps. |
+| `include/pqe/layer3_execution/sequential/seq_group_by.hpp` | C++20 Header | Hash-based grouping declarations aggregating running metrics (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`) keyed on `CategoryID`. |
+| `src/layer3_execution/sequential/seq_group_by.cpp` | C++20 Source | Hash aggregation implementation maintaining per-category metrics maps and sorted result rows. |
+| `include/pqe/layer5_telemetry/telemetry.hpp` | C++20 Header | High-resolution scoped timer framework using `std::chrono` to record baseline $T_1$ latency and calculate row throughput. |
+| `src/main.cpp` | C++20 Source | Application entrypoint orchestrating CLI argument parsing, mmap ingestion, columnar memory loading, baseline sequential query benchmarking ($T_1$), and morsel allocation diagnostics. |
 
 ---
 

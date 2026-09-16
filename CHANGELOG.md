@@ -8,10 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### [Added]
-- Documentation: Created `README.md` with complete architecture layout, file component inventory, and execution/deployment guide.
-- Documentation: Created `CHANGELOG.md` following Keep a Changelog standards.
+- **Phase 2 Baseline Sequential Execution Engine (Layer 3)**:
+  - `SeqScan` (`include/pqe/layer3_execution/sequential/seq_scan.hpp`, `src/layer3_execution/sequential/seq_scan.cpp`): Single-threaded iterator linearly traversing contiguous columnar memory vectors across entire tables or bounded morsels.
+  - `SeqFilter` (`include/pqe/layer3_execution/sequential/seq_filter.hpp`, `src/layer3_execution/sequential/seq_filter.cpp`): Predicate evaluation engine emitting dense row selection vectors (`std::vector<row_id_t>`) for downstream zero-copy pipelining.
+  - `SeqAggregator` (`include/pqe/layer3_execution/sequential/seq_aggregator.hpp`, `src/layer3_execution/sequential/seq_aggregator.cpp`): Single-pass scalar aggregations for `COUNT()`, `SUM()`, `AVG()`, `MIN()`, and `MAX()`.
+  - `SeqGroupBy` (`include/pqe/layer3_execution/sequential/seq_group_by.hpp`, `src/layer3_execution/sequential/seq_group_by.cpp`): Single-threaded hash table aggregating running metrics (`COUNT`, `SUM(Quantity)`, `AVG(Price)`, `MIN(Price)`, `MAX(Price)`) partitioned by `CategoryID`.
+- **Baseline Telemetry & Timing Framework (Layer 5)**:
+  - `ScopedTimer` and `QueryMetrics` (`include/pqe/layer5_telemetry/telemetry.hpp`): High-resolution `std::chrono` timers capturing execution time $T_1$, row processing latency ($\mu s / ms$), and throughput (rows/sec).
+- **Benchmark Analytical Query Suite**:
+  - Extended `src/main.cpp` with an end-to-end evaluation suite running 4 benchmark queries (Full Scan, Predicate Filter, Multi-Metric Aggregation, and Hash GROUP BY) establishing the $T_1$ baseline.
+- **Build System Extension**:
+  - Added `pqe_engine` static library target to `CMakeLists.txt` linked with `pqe_storage` and OpenMP.
 
 ---
+
+## [0.1.1] - 2026-09-17 00:33:43 +0530
+
+### [Added]
+- [`fdd45b3`] (2026-09-17 00:33:43 +0530) **Project Documentation**: Created comprehensive `README.md` containing architectural overview, ASCII directory tree, file component inventory table, and execution/deployment instructions.
+- [`fdd45b3`] (2026-09-17 00:33:43 +0530) **Changelog**: Initialized `CHANGELOG.md` following Keep a Changelog standards.
 
 ## [0.1.0] - 2026-09-16 22:28:45 +0530
 

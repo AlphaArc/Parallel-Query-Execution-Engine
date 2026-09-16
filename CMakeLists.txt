@@ -64,6 +64,29 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 # ==============================================================================
+# Layer 2/3/5: Query Execution & Telemetry Library
+# ==============================================================================
+add_library(pqe_engine STATIC
+    src/layer3_execution/sequential/seq_scan.cpp
+    src/layer3_execution/sequential/seq_filter.cpp
+    src/layer3_execution/sequential/seq_aggregator.cpp
+    src/layer3_execution/sequential/seq_group_by.cpp
+)
+
+target_include_directories(pqe_engine
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+
+target_compile_options(pqe_engine PRIVATE ${COA_WARNING_FLAGS})
+target_link_libraries(pqe_engine PUBLIC pqe_storage)
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(pqe_engine PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+# ==============================================================================
 # Engine Executable & Verification CLI
 # ==============================================================================
 add_executable(coa_engine
@@ -76,7 +99,7 @@ target_include_directories(coa_engine
 )
 
 target_compile_options(coa_engine PRIVATE ${COA_WARNING_FLAGS})
-target_link_libraries(coa_engine PRIVATE pqe_storage)
+target_link_libraries(coa_engine PRIVATE pqe_engine pqe_storage)
 
 if(OpenMP_CXX_FOUND)
     target_link_libraries(coa_engine PRIVATE OpenMP::OpenMP_CXX)
