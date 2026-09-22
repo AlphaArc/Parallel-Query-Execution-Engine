@@ -60,3 +60,4 @@ Thumbs.db
 # Ignore generated non-sample data
 data/scale/
 *.csv
+!data/sample/*.csv
