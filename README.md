@@ -121,7 +121,7 @@ python scripts/generate_sales_data.py --rows 1000000 --out data/sample/sales_1M.
 
 ### 3. Build & Compilation
 
-Configure and build the project using CMake. The build system will detect OpenMP and compile the static library `pqe_storage` alongside the main engine executable `coa_engine`:
+Configure and build the project using CMake. The build system will detect OpenMP and compile the static library `pqe_storage` alongside the main engine executable `pqe_engine`:
 
 ```powershell
 # Configure build directory (MinGW Makefiles on Windows)
@@ -131,7 +131,7 @@ cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-*Executable Output*: `build/bin/coa_engine.exe` (or `build/bin/coa_engine` on POSIX systems).
+*Executable Output*: `build/bin/pqe_engine.exe` (or `build/bin/pqe_engine` on POSIX systems).
 
 ---
 
@@ -141,10 +141,10 @@ Execute the query engine with configurable dataset paths, morsel chunk sizes, an
 
 ```powershell
 # Run with default 250k rows dataset and 100,000-row morsels
-.\build\bin\coa_engine.exe --data data/sample/sales_250k.csv --morsel-size 100000 --inspect 5
+.\build\bin\pqe_engine.exe --data data/sample/sales_250k.csv --morsel-size 100000 --inspect 5
 
 # Display command-line options and usage parameters
-.\build\bin\coa_engine.exe --help
+.\build\bin\pqe_engine.exe --help
 ```
 
 ---
