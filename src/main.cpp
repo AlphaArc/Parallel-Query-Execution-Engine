@@ -6,7 +6,13 @@
 #include "pqe/layer3_execution/sequential/seq_filter.hpp"
 #include "pqe/layer3_execution/sequential/seq_aggregator.hpp"
 #include "pqe/layer3_execution/sequential/seq_group_by.hpp"
+#include "pqe/layer3_execution/parallel/omp_scan.hpp"
+#include "pqe/layer3_execution/parallel/omp_filter.hpp"
+#include "pqe/layer3_execution/parallel/omp_aggregator.hpp"
+#include "pqe/layer3_execution/parallel/omp_group_by.hpp"
 #include "pqe/layer5_telemetry/telemetry.hpp"
+#include "pqe/layer5_telemetry/speedup_calculator.hpp"
+#include <omp.h>
 
 #include <iostream>
 #include <iomanip>
@@ -32,7 +38,14 @@ namespace {
                   << "  --run-queries             Run full baseline sequential analytical query suite\n";
     }
 
-    void run_sequential_queries(const pqe::storage::ColumnarTable& table) {
+    struct BenchmarkMetrics {
+        pqe::telemetry::QueryMetrics q1;
+        pqe::telemetry::QueryMetrics q2;
+        pqe::telemetry::QueryMetrics q3;
+        pqe::telemetry::QueryMetrics q4;
+    };
+
+    BenchmarkMetrics run_sequential_queries(const pqe::storage::ColumnarTable& table) {
         std::cout << "\n===============================================================\n";
         std::cout << "  EXECUTING BASELINE SEQUENTIAL QUERIES (T1 PROFILING)\n";
         std::cout << "===============================================================\n";
@@ -42,83 +55,87 @@ namespace {
         pqe::execution::sequential::SeqFilter filter(table);
         pqe::execution::sequential::SeqAggregator agg(table);
         pqe::execution::sequential::SeqGroupBy group_by(table);
+        
+        BenchmarkMetrics results;
 
-        // -------------------------------------------------------------
-        // Query 1: Full Table Scan & Row Count
-        // SQL: SELECT COUNT(*) FROM sales;
-        // -------------------------------------------------------------
         {
             pqe::telemetry::ScopedTimer timer("Q1: Full Table Scan & COUNT(*)", total_rows);
             std::size_t count = agg.count();
-            auto metrics = timer.stop(count);
-            metrics.print_report();
+            results.q1 = timer.stop(count);
+            results.q1.print_report();
             std::cout << "  -> Result: " << count << " rows counted.\n\n";
         }
 
-        // -------------------------------------------------------------
-        // Query 2: Predicate Filter Selection
-        // SQL: SELECT * FROM sales WHERE Quantity > 50 AND CategoryID == 10;
-        // -------------------------------------------------------------
         {
             pqe::telemetry::ScopedTimer timer("Q2: Filter (Quantity > 50 AND CategoryID == 10)", total_rows);
             auto selection = filter.filter_quantity_and_category(50, 10);
-            auto metrics = timer.stop(selection.size());
-            metrics.print_report();
-            double selectivity = (static_cast<double>(selection.size()) / static_cast<double>(total_rows)) * 100.0;
-            std::cout << "  -> Result: " << selection.size() << " matched rows (" 
-                      << std::fixed << std::setprecision(2) << selectivity << "% selectivity)\n\n";
+            results.q2 = timer.stop(selection.size());
+            results.q2.print_report();
         }
 
-        // -------------------------------------------------------------
-        // Query 3: Filter + Multi-Metric Aggregation
-        // SQL: SELECT COUNT(*), SUM(Price), AVG(Price), MIN(Price), MAX(Price) 
-        //      FROM sales WHERE Quantity > 50;
-        // -------------------------------------------------------------
         {
-            pqe::telemetry::ScopedTimer timer("Q3: Filter (Quantity > 50) + Aggregation (COUNT, SUM, AVG, MIN, MAX)", total_rows);
+            pqe::telemetry::ScopedTimer timer("Q3: Filter (Quantity > 50) + Aggregation", total_rows);
             auto selection = filter.filter_quantity_gt(50);
             auto result = agg.aggregate_price(selection);
-            auto metrics = timer.stop(result.count);
-            metrics.print_report();
-            result.print_report("Price WHERE Quantity > 50");
+            results.q3 = timer.stop(result.count);
+            results.q3.print_report();
             std::cout << "\n";
         }
 
-        // -------------------------------------------------------------
-        // Query 4: Hash GROUP BY Aggregation
-        // SQL: SELECT CategoryID, COUNT(*), SUM(Quantity), AVG(Price), MIN(Price), MAX(Price) 
-        //      FROM sales GROUP BY CategoryID ORDER BY CategoryID;
-        // -------------------------------------------------------------
         {
-            pqe::telemetry::ScopedTimer timer("Q4: Hash GROUP BY CategoryID (Aggregations)", total_rows);
+            pqe::telemetry::ScopedTimer timer("Q4: Hash GROUP BY CategoryID", total_rows);
             auto grouped_rows = group_by.group_by_category_sorted();
-            auto metrics = timer.stop(total_rows);
-            metrics.print_report();
+            results.q4 = timer.stop(total_rows);
+            results.q4.print_report();
+        }
+        
+        return results;
+    }
 
-            std::cout << "  -> Total Groups Created: " << grouped_rows.size() << "\n";
-            std::cout << "  -> Preview First 5 Grouped Categories:\n";
-            std::cout << "     " 
-                      << std::left
-                      << std::setw(8)  << "CatID"
-                      << std::setw(12) << "Count"
-                      << std::setw(14) << "SumQty"
-                      << std::setw(14) << "AvgPrice"
-                      << std::setw(14) << "MinPrice"
-                      << std::setw(14) << "MaxPrice" << "\n";
-            std::cout << "     " << std::string(72, '-') << "\n";
+    void run_parallel_queries(const pqe::storage::ColumnarTable& table, int threads, const BenchmarkMetrics& seq_metrics) {
+        std::cout << "\n===============================================================\n";
+        std::cout << "  EXECUTING PARALLEL QUERIES (TN = " << threads << ")\n";
+        std::cout << "===============================================================\n";
 
-            for (std::size_t i = 0; i < std::min(std::size_t{5}, grouped_rows.size()); ++i) {
-                const auto& g = grouped_rows[i];
-                std::cout << "     "
-                          << std::left
-                          << std::setw(8)  << g.category_id
-                          << std::setw(12) << g.metrics.count
-                          << std::setw(14) << g.metrics.sum_quantity
-                          << std::setw(14) << std::fixed << std::setprecision(2) << g.metrics.avg_price()
-                          << std::setw(14) << std::fixed << std::setprecision(2) << g.metrics.min_price
-                          << std::setw(14) << std::fixed << std::setprecision(2) << g.metrics.max_price << "\n";
-            }
-            std::cout << "\n";
+        omp_set_num_threads(threads);
+
+        const std::size_t total_rows = table.row_count();
+        pqe::execution::parallel::OmpScan scan(table);
+        pqe::execution::parallel::OmpFilter filter(table);
+        pqe::execution::parallel::OmpAggregator agg(table);
+        pqe::execution::parallel::OmpGroupBy group_by(table);
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q1: Full Table Scan & COUNT(*)", total_rows);
+            std::size_t count = agg.count();
+            auto par_metrics = timer.stop(count);
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q1, par_metrics, threads};
+            speedup.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q2: Filter (Quantity > 50 AND CategoryID == 10)", total_rows);
+            auto selection = filter.filter_quantity_and_category(50, 10);
+            auto par_metrics = timer.stop(selection.size());
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q2, par_metrics, threads};
+            speedup.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q3: Filter (Quantity > 50) + Aggregation", total_rows);
+            auto selection = filter.filter_quantity_gt(50);
+            auto result = agg.aggregate_price(selection);
+            auto par_metrics = timer.stop(result.count);
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q3, par_metrics, threads};
+            speedup.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q4: Hash GROUP BY CategoryID", total_rows);
+            auto grouped_rows = group_by.group_by_category_sorted();
+            auto par_metrics = timer.stop(total_rows);
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q4, par_metrics, threads};
+            speedup.print_report();
         }
     }
 }
@@ -130,6 +147,7 @@ int main(int argc, char* argv[]) {
     std::size_t morsel_size = pqe::DEFAULT_MORSEL_SIZE;
     std::size_t inspect_count = 5;
     bool run_queries = true;
+    int num_threads = 4;
 
     const std::vector<std::string_view> args(argv + 1, argv + argc);
     for (std::size_t i = 0; i < args.size(); ++i) {
@@ -142,6 +160,8 @@ int main(int argc, char* argv[]) {
             morsel_size = static_cast<std::size_t>(std::stoull(std::string(args[++i])));
         } else if ((args[i] == "-i" || args[i] == "--inspect") && i + 1 < args.size()) {
             inspect_count = static_cast<std::size_t>(std::stoull(std::string(args[++i])));
+        } else if ((args[i] == "-t" || args[i] == "--threads") && i + 1 < args.size()) {
+            num_threads = std::stoi(std::string(args[++i]));
         } else if (args[i] == "--no-queries") {
             run_queries = false;
         }
@@ -230,11 +250,12 @@ int main(int argc, char* argv[]) {
 
     // Step 5: Always run or conditionally run sequential query suite
     if (run_queries) {
-        run_sequential_queries(table);
+        auto seq_metrics = run_sequential_queries(table);
+        run_parallel_queries(table, num_threads, seq_metrics);
     }
 
     std::cout << "===============================================================\n";
-    std::cout << "[STATUS] Phase 2 Sequential Engine verified successfully!\n";
+    std::cout << "[STATUS] Phase 3 Parallel Engine verified successfully!\n";
     std::cout << "===============================================================\n";
 
     return 0;

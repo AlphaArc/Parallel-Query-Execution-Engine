@@ -71,6 +71,10 @@ add_library(pqe_engine STATIC
     src/layer3_execution/sequential/seq_filter.cpp
     src/layer3_execution/sequential/seq_aggregator.cpp
     src/layer3_execution/sequential/seq_group_by.cpp
+    src/layer3_execution/parallel/omp_scan.cpp
+    src/layer3_execution/parallel/omp_filter.cpp
+    src/layer3_execution/parallel/omp_aggregator.cpp
+    src/layer3_execution/parallel/omp_group_by.cpp
 )
 
 target_include_directories(pqe_engine
