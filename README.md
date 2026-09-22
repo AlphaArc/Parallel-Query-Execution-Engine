@@ -7,7 +7,7 @@ A high-performance, lightweight analytical database query engine developed in **
 ## Directory Architecture
 
 ```text
-COA Project/
+Parallel Query Execution Engine/
 ├── .gitignore
 ├── CMakeLists.txt
 ├── architecture_blueprint.md

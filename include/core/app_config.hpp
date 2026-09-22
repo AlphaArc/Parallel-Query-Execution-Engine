@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdint>
 
-namespace coa::core {
+namespace pqe::core {
 
     struct Version {
         std::uint32_t major{0};
@@ -19,7 +19,7 @@ namespace coa::core {
     };
 
     struct AppConfig {
-        static constexpr std::string_view ProjectName = "COA Project";
+        static constexpr std::string_view ProjectName = "Parallel Query Execution Engine";
         static constexpr std::string_view Environment = "Development";
         static constexpr Version CurrentVersion{0, 1, 0};
 
@@ -28,4 +28,4 @@ namespace coa::core {
         bool verbose_logging{true};
     };
 
-} // namespace coa::core
+} // namespace pqe::core

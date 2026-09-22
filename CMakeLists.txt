@@ -29,11 +29,16 @@ else()
 endif()
 
 # Compiler Configuration
-set(COA_WARNING_FLAGS "")
+option(USE_SANITIZERS "Enable memory safety sanitizers (ASan, UBSan)" OFF)
+set(PQE_WARNING_FLAGS "")
+
 if(MSVC)
-    set(COA_WARNING_FLAGS /W4 /permissive- /arch:AVX2)
+    set(PQE_WARNING_FLAGS /W4 /permissive- /arch:AVX2)
+    if(USE_SANITIZERS)
+        list(APPEND PQE_WARNING_FLAGS /fsanitize=address)
+    endif()
 else()
-    set(COA_WARNING_FLAGS 
+    set(PQE_WARNING_FLAGS 
         -Wall 
         -Wextra 
         -Wpedantic 
@@ -41,6 +46,10 @@ else()
         -Wunused
         -mavx2
     )
+    if(USE_SANITIZERS)
+        list(APPEND PQE_WARNING_FLAGS -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+    endif()
 endif()
 
 # ==============================================================================
@@ -58,7 +67,7 @@ target_include_directories(pqe_storage
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_options(pqe_storage PRIVATE ${COA_WARNING_FLAGS})
+target_compile_options(pqe_storage PRIVATE ${PQE_WARNING_FLAGS})
 
 if(OpenMP_CXX_FOUND)
     target_link_libraries(pqe_storage PUBLIC OpenMP::OpenMP_CXX)
@@ -84,7 +93,7 @@ target_include_directories(pqe_core
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_options(pqe_core PRIVATE ${COA_WARNING_FLAGS})
+target_compile_options(pqe_core PRIVATE ${PQE_WARNING_FLAGS})
 target_link_libraries(pqe_core PUBLIC pqe_storage)
 
 if(OpenMP_CXX_FOUND)
@@ -103,7 +112,7 @@ target_include_directories(pqe_engine
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_options(pqe_engine PRIVATE ${COA_WARNING_FLAGS})
+target_compile_options(pqe_engine PRIVATE ${PQE_WARNING_FLAGS})
 target_link_libraries(pqe_engine PRIVATE pqe_core pqe_storage)
 
 if(OpenMP_CXX_FOUND)

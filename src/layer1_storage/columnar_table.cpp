@@ -18,13 +18,13 @@ namespace pqe::storage {
     }
 
     void ColumnarTable::clear() noexcept {
-        transaction_id_.clear();
-        customer_id_.clear();
-        quantity_.clear();
-        price_.clear();
-        discount_.clear();
-        category_id_.clear();
-        store_region_.clear();
+        std::vector<std::int32_t>().swap(transaction_id_);
+        std::vector<std::int32_t>().swap(customer_id_);
+        std::vector<std::int32_t>().swap(quantity_);
+        std::vector<float>().swap(price_);
+        std::vector<float>().swap(discount_);
+        std::vector<std::int32_t>().swap(category_id_);
+        std::vector<std::string>().swap(store_region_);
     }
 
     void ColumnarTable::push_back(std::int32_t tx_id, std::int32_t cust_id, std::int32_t qty,

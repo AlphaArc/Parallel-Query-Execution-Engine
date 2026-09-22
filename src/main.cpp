@@ -388,5 +388,8 @@ int main(int argc, char* argv[]) {
     std::cout << "[STATUS] Phase 3 Parallel Engine verified successfully!\n";
     std::cout << "===============================================================\n";
 
+    // Explicitly release 1.9 GB of column vectors before shutdown
+    table.clear();
+
     return 0;
 }

@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary & Architectural Vision
 
-The **COA Project** is architected as an enterprise-grade, high-performance distributed engine designed around modularity, low-latency execution, zero-copy inter-process communication, and strict memory safety.
+The **Parallel Query Execution Engine** is architected as an enterprise-grade, high-performance distributed engine designed around modularity, low-latency execution, zero-copy inter-process communication, and strict memory safety.
 
 The platform decomposes complex state execution, simulation, and telemetry into autonomous microservice modules that can be deployed as:
 1. **Monolithic Unified Runtime (In-Process / Shared Memory)**: Optimized for development, debugging, and ultra-low latency.
