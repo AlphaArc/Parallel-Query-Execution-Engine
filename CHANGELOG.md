@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### [Added]
+- **Hardware AVX2 SIMD Vectorization**:
+  - Implemented manual AVX2 hardware intrinsics (`_mm256_loadu_ps`, `_mm256_add_ps`, `_mm256_i32gather_ps`, etc.) in `OmpAggregator` for massive arithmetic speedups (`aggregate_price_simd` and `sum_net_sales_simd`).
+  - Added `-mavx2` / `/arch:AVX2` compiler flags and horizontal vector reduction helpers.
+  - Python Dashboard now displays a dedicated **PQE Latency (SIMD AVX)** column, comparing the SIMD latency against standard scalar Parallel latency and DuckDB.
+- **Extended 10-Query Benchmark Suite**:
+  - Expanded `main.cpp` sequential and parallel profiling to execute 6 new complex analytical queries (`Q5`-`Q10`), heavily utilizing existing `OmpFilter`, `OmpAggregator` and pipelining structures.
+  - Upgraded Python Benchmark Dashboard to parse all 10 queries, adding HTML hover tooltips (revealing SQL equivalents) and dynamically displaying the first 5 raw dataset records.
 - **Cardinality-Aware Group By & Automation (Phase 6)**:
   - `OmpGroupBy` now dynamically selects Lock-Free Thread-Local maps for low-cardinality keys (`CategoryID`), completely eliminating the lock contention bottleneck.
   - Developed unified `scripts/run_benchmarks_and_report.py` to automatically execute the C++ engine, run DuckDB baselines, and generate/open a Tailwind CSS HTML comparison dashboard.

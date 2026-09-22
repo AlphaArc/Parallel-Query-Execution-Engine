@@ -1,7 +1,7 @@
 # System Architecture Blueprint: Distributed Engine & Microservices
 
-**Author:** Principal Software Architect  
-**Project:** COA Project (High-Performance Engine & Microservices Architecture)  
+**Author:** Software Engineer
+**Project:** Parallel Query Execution Engine
 **Standard:** C++20 / C++23  
 **Target Environments:** Linux (x86_64 / ARM64), Windows (MSVC / MinGW-w64)
 
@@ -97,7 +97,7 @@ To meet both distributed requirements and extreme throughput demands, the archit
 ## 5. Repository Directory Organization Roadmap
 
 ```
-COA Project/
+Parallel Query Execution Engine/
 ├── CMakeLists.txt              # Root build configuration
 ├── architecture_blueprint.md   # Architectural specifications
 ├── .gitignore                  # Git ignore rules

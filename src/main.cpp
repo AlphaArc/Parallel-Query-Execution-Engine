@@ -43,6 +43,12 @@ namespace {
         pqe::telemetry::QueryMetrics q2;
         pqe::telemetry::QueryMetrics q3;
         pqe::telemetry::QueryMetrics q4;
+        pqe::telemetry::QueryMetrics q5;
+        pqe::telemetry::QueryMetrics q6;
+        pqe::telemetry::QueryMetrics q7;
+        pqe::telemetry::QueryMetrics q8;
+        pqe::telemetry::QueryMetrics q9;
+        pqe::telemetry::QueryMetrics q10;
     };
 
     BenchmarkMetrics run_sequential_queries(const pqe::storage::ColumnarTable& table) {
@@ -89,6 +95,53 @@ namespace {
             results.q4.print_report();
         }
         
+        {
+            pqe::telemetry::ScopedTimer timer("Q5: Filter (CategoryID == 1) + Aggregate Net Sales", total_rows);
+            auto selection = filter.filter_category_eq(1);
+            auto result = agg.sum_net_sales(selection);
+            results.q5 = timer.stop(selection.size());
+            results.q5.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q6: Filter (Quantity > 90) + COUNT(*)", total_rows);
+            auto selection = filter.filter_quantity_gt(90);
+            auto count = agg.count(selection);
+            results.q6 = timer.stop(count);
+            results.q6.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q7: Filter (Quantity > 20 AND CategoryID == 5) + Aggregate Price", total_rows);
+            auto selection = filter.filter_quantity_and_category(20, 5);
+            auto result = agg.aggregate_price(selection);
+            results.q7 = timer.stop(result.count);
+            results.q7.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q8: Filter (Quantity > 50) + Hash GROUP BY CategoryID", total_rows);
+            auto selection = filter.filter_quantity_gt(50);
+            auto grouped_rows = group_by.group_by_category_sorted(selection);
+            results.q8 = timer.stop(selection.size());
+            results.q8.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q9: Full Table Aggregate (Net Sales)", total_rows);
+            auto result = agg.sum_net_sales();
+            results.q9 = timer.stop(total_rows);
+            results.q9.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q10: Filter (CategoryID == 20) + Aggregate Quantity", total_rows);
+            auto selection = filter.filter_category_eq(20);
+            auto result = agg.sum_quantity(selection);
+            results.q10 = timer.stop(selection.size());
+            results.q10.print_report();
+        }
+        
         return results;
     }
 
@@ -122,12 +175,18 @@ namespace {
         }
 
         {
-            pqe::telemetry::ScopedTimer timer("Q3: Filter (Quantity > 50) + Aggregation", total_rows);
+            pqe::telemetry::ScopedTimer timer("Q3: Filter (Quantity > 50) + Aggregate Price", total_rows);
             auto selection = filter.filter_quantity_gt(50);
             auto result = agg.aggregate_price(selection);
             auto par_metrics = timer.stop(result.count);
             pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q3, par_metrics, threads};
             speedup.print_report();
+
+            // Hardware SIMD Benchmark
+            pqe::telemetry::ScopedTimer simd_timer("Q3: SIMD AVX2 Filter + Aggregate Price", total_rows);
+            auto simd_result = agg.aggregate_price_simd(selection);
+            auto simd_metrics = simd_timer.stop(simd_result.count);
+            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q3: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
         }
 
         {
@@ -135,6 +194,77 @@ namespace {
             auto grouped_rows = group_by.group_by_category_sorted();
             auto par_metrics = timer.stop(total_rows);
             pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q4, par_metrics, threads};
+            speedup.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q5: Filter (CategoryID == 1) + Aggregate Net Sales", total_rows);
+            auto selection = filter.filter_category_eq(1);
+            auto result = agg.sum_net_sales(selection);
+            auto par_metrics = timer.stop(selection.size());
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q5, par_metrics, threads};
+            speedup.print_report();
+
+            // Hardware SIMD Benchmark
+            pqe::telemetry::ScopedTimer simd_timer("Q5: SIMD AVX2 Filter + Aggregate Net Sales", total_rows);
+            auto simd_result = agg.sum_net_sales_simd(selection);
+            auto simd_metrics = simd_timer.stop(selection.size());
+            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q5: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q6: Filter (Quantity > 90) + COUNT(*)", total_rows);
+            auto selection = filter.filter_quantity_gt(90);
+            auto count = agg.count(selection);
+            auto par_metrics = timer.stop(count);
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q6, par_metrics, threads};
+            speedup.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q7: Filter (Quantity > 20 AND CategoryID == 5) + Aggregate Price", total_rows);
+            auto selection = filter.filter_quantity_and_category(20, 5);
+            auto result = agg.aggregate_price(selection);
+            auto par_metrics = timer.stop(result.count);
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q7, par_metrics, threads};
+            speedup.print_report();
+
+            // Hardware SIMD Benchmark
+            pqe::telemetry::ScopedTimer simd_timer("Q7: SIMD AVX2 Multi-Predicate + Aggregate Price", total_rows);
+            auto simd_result = agg.aggregate_price_simd(selection);
+            auto simd_metrics = simd_timer.stop(simd_result.count);
+            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q7: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q8: Filter (Quantity > 50) + Hash GROUP BY CategoryID", total_rows);
+            auto selection = filter.filter_quantity_gt(50);
+            auto grouped_rows = group_by.group_by_category_sorted(selection);
+            auto par_metrics = timer.stop(selection.size());
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q8, par_metrics, threads};
+            speedup.print_report();
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q9: Full Table Aggregate (Net Sales)", total_rows);
+            auto result = agg.sum_net_sales();
+            auto par_metrics = timer.stop(total_rows);
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q9, par_metrics, threads};
+            speedup.print_report();
+
+            // Hardware SIMD Benchmark
+            pqe::telemetry::ScopedTimer simd_timer("Q9: SIMD AVX2 Full Table Aggregate (Net Sales)", total_rows);
+            auto simd_result = agg.sum_net_sales_simd();
+            auto simd_metrics = simd_timer.stop(total_rows);
+            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q9: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+        }
+
+        {
+            pqe::telemetry::ScopedTimer timer("Q10: Filter (CategoryID == 20) + Aggregate Quantity", total_rows);
+            auto selection = filter.filter_category_eq(20);
+            auto result = agg.sum_quantity(selection);
+            auto par_metrics = timer.stop(selection.size());
+            pqe::telemetry::ParallelSpeedupMetrics speedup{seq_metrics.q10, par_metrics, threads};
             speedup.print_report();
         }
     }

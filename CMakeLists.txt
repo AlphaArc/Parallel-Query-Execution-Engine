@@ -28,10 +28,10 @@ else()
     message(WARNING "OpenMP not found: Proceeding with serial CPU execution only")
 endif()
 
-# Compiler Warnings Configuration
+# Compiler Configuration
 set(COA_WARNING_FLAGS "")
 if(MSVC)
-    set(COA_WARNING_FLAGS /W4 /permissive-)
+    set(COA_WARNING_FLAGS /W4 /permissive- /arch:AVX2)
 else()
     set(COA_WARNING_FLAGS 
         -Wall 
@@ -39,6 +39,7 @@ else()
         -Wpedantic 
         -Wshadow 
         -Wunused
+        -mavx2
     )
 endif()
 

@@ -35,6 +35,12 @@ namespace pqe::execution::parallel {
         [[nodiscard]] double sum_net_sales() const noexcept;
         [[nodiscard]] double sum_net_sales(const std::vector<row_id_t>& selection) const noexcept;
 
+        // Hardware AVX2 SIMD Intrinsics
+        [[nodiscard]] ScalarAggregateResult aggregate_price_simd() const noexcept;
+        [[nodiscard]] ScalarAggregateResult aggregate_price_simd(const std::vector<row_id_t>& selection) const noexcept;
+        [[nodiscard]] double sum_net_sales_simd() const noexcept;
+        [[nodiscard]] double sum_net_sales_simd(const std::vector<row_id_t>& selection) const noexcept;
+
     private:
         const storage::ColumnarTable& table_;
     };

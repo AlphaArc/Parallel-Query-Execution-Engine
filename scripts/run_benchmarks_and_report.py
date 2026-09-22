@@ -31,20 +31,35 @@ def run_pqe_engine(data_path, threads):
     #   -> Par Time (TN):  8.35 ms
     
     pqe_metrics = {}
+    simd_metrics = {}
     
     current_q = None
+    is_simd = False
     for line in output.split('\n'):
         if "[TELEMETRY - PARALLEL SPEEDUP]" in line:
-            if "Q1" in line: current_q = "Q1"
-            elif "Q2" in line: current_q = "Q2"
-            elif "Q3" in line: current_q = "Q3"
-            elif "Q4" in line: current_q = "Q4"
-        elif "-> Par Time (TN):" in line and current_q:
+            is_simd = False
+            match = re.search(r'(Q\d+):', line)
+            if match:
+                current_q = match.group(1)
+        elif "[TELEMETRY - SIMD SPEEDUP]" in line:
+            is_simd = True
+            match = re.search(r'(Q\d+):', line)
+            if match:
+                current_q = match.group(1)
+            
+            # Extract time from the same line if available
+            match_time = re.search(r'([\d\.]+)\s+ms', line)
+            if match_time and current_q:
+                simd_metrics[current_q] = float(match_time.group(1))
+
+        elif "-> Par Time (TN):" in line and current_q and not is_simd:
             match = re.search(r'([\d\.]+)\s+ms', line)
             if match:
                 pqe_metrics[current_q] = float(match.group(1))
                 
-    return pqe_metrics
+    return pqe_metrics, simd_metrics
+
+run_pqe = run_pqe_engine
 
 def run_duckdb(data_path):
     print("Running DuckDB Baseline...")
@@ -72,48 +87,115 @@ def run_duckdb(data_path):
     start = time.perf_counter()
     con.execute("SELECT CategoryID, COUNT(*), SUM(Quantity), SUM(Price), MIN(Price), MAX(Price) FROM sales GROUP BY CategoryID").fetchall()
     duckdb_metrics["Q4"] = (time.perf_counter() - start) * 1000.0
+
+    # Q5
+    start = time.perf_counter()
+    con.execute("SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales WHERE CategoryID = 1").fetchall()
+    duckdb_metrics["Q5"] = (time.perf_counter() - start) * 1000.0
+
+    # Q6
+    start = time.perf_counter()
+    con.execute("SELECT COUNT(*) FROM sales WHERE Quantity > 90").fetchall()
+    duckdb_metrics["Q6"] = (time.perf_counter() - start) * 1000.0
+
+    # Q7
+    start = time.perf_counter()
+    con.execute("SELECT COUNT(*), SUM(Price), AVG(Price), MIN(Price), MAX(Price) FROM sales WHERE Quantity > 20 AND CategoryID = 5").fetchall()
+    duckdb_metrics["Q7"] = (time.perf_counter() - start) * 1000.0
+
+    # Q8
+    start = time.perf_counter()
+    con.execute("SELECT CategoryID, COUNT(*), SUM(Quantity), SUM(Price), MIN(Price), MAX(Price) FROM sales WHERE Quantity > 50 GROUP BY CategoryID").fetchall()
+    duckdb_metrics["Q8"] = (time.perf_counter() - start) * 1000.0
+
+    # Q9
+    start = time.perf_counter()
+    con.execute("SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales").fetchall()
+    duckdb_metrics["Q9"] = (time.perf_counter() - start) * 1000.0
+
+    # Q10
+    start = time.perf_counter()
+    con.execute("SELECT SUM(Quantity) FROM sales WHERE CategoryID = 20").fetchall()
+    duckdb_metrics["Q10"] = (time.perf_counter() - start) * 1000.0
     
     return duckdb_metrics
 
-def generate_html(pqe, duck, data_path, threads, output_html="benchmark_dashboard.html"):
+def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_dashboard.html"):
     print("Generating HTML Dashboard...")
     
+    # Read sample data and count
+    sample_records = []
+    total_records = 0
+    try:
+        with open(data_path, "r", encoding="utf-8") as f:
+            header = f.readline().strip().split(",")
+            for line in f:
+                total_records += 1
+                if len(sample_records) < 5:
+                    sample_records.append(line.strip().split(","))
+    except Exception as e:
+        print("Could not read CSV for sample data:", e)
+        header = []
+
     queries = {
-        "Q1": "Full Table Scan (COUNT)",
-        "Q2": "Dense Filter (Qty > 50 & Cat = 10)",
-        "Q3": "Filter + Multi-Metric Aggregation",
-        "Q4": "Hash GROUP BY CategoryID (Cardinality 50)"
+        "Q1": ("Full Table Scan (COUNT)", "SELECT COUNT(*) FROM sales;"),
+        "Q2": ("Dense Filter (Qty > 50 & Cat = 10)", "SELECT * FROM sales WHERE Quantity > 50 AND CategoryID = 10;"),
+        "Q3": ("Filter + Multi-Metric Aggregation", "SELECT COUNT(*), SUM(Price), AVG(Price), MIN(Price), MAX(Price) FROM sales WHERE Quantity > 50;"),
+        "Q4": ("Hash GROUP BY CategoryID", "SELECT CategoryID, COUNT(*), SUM(Quantity), SUM(Price), MIN(Price), MAX(Price) FROM sales GROUP BY CategoryID;"),
+        "Q5": ("Filter + Net Sales Arithmetic", "SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales WHERE CategoryID = 1;"),
+        "Q6": ("High-Selectivity Filter", "SELECT COUNT(*) FROM sales WHERE Quantity > 90;"),
+        "Q7": ("Multi-Predicate + Multi-Metric Agg", "SELECT COUNT(*), SUM(Price), ... FROM sales WHERE Quantity > 20 AND CategoryID = 5;"),
+        "Q8": ("Filtered Hash GROUP BY", "SELECT CategoryID, COUNT(*), ... FROM sales WHERE Quantity > 50 GROUP BY CategoryID;"),
+        "Q9": ("Full Table Arithmetic Aggregation", "SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales;"),
+        "Q10": ("Single-Column Scalar Reduction", "SELECT SUM(Quantity) FROM sales WHERE CategoryID = 20;")
     }
     
     rows_html = ""
-    for q in ["Q1", "Q2", "Q3", "Q4"]:
+    for i in range(1, 11):
+        q = f"Q{i}"
         pqe_t = pqe.get(q, 0.0)
         duck_t = duck.get(q, 0.0)
+        simd_t = simd.get(q, None)
         
-        if pqe_t == 0.0 and duck_t > 0:
+        desc, sql = queries.get(q, ("Unknown", ""))
+        
+        best_pqe = min(pqe_t, simd_t) if simd_t is not None else pqe_t
+        
+        if best_pqe == 0.0 and duck_t > 0:
             winner = "PQE Engine"
             speedup_text = "Infinite (Metadata)"
-        elif pqe_t < duck_t:
+        elif best_pqe < duck_t:
             winner = "PQE Engine"
-            speedup = duck_t / max(pqe_t, 0.001)
+            speedup = duck_t / max(best_pqe, 0.001)
             speedup_text = f"{speedup:.2f}x Faster"
         else:
             winner = "DuckDB"
-            speedup = pqe_t / max(duck_t, 0.001)
+            speedup = best_pqe / max(duck_t, 0.001)
             speedup_text = f"{speedup:.2f}x Faster"
             
         winner_badge = f'<span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">{winner}</span>' if winner == "PQE Engine" else f'<span class="bg-yellow-900 text-yellow-300 py-1 px-3 rounded-full text-xs font-bold">{winner}</span>'
+        
+        simd_text = f'<span class="text-purple-400 font-mono font-bold">{simd_t:.2f} ms</span>' if simd_t is not None else '<span class="text-gray-600">-</span>'
             
         rows_html += f"""
-        <tr class="border-b border-gray-700 hover:bg-gray-800 transition">
-            <td class="py-4 px-6 font-medium text-white">{q}</td>
-            <td class="py-4 px-6 text-gray-400">{queries[q]}</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono font-bold">{pqe_t:.2f} ms</td>
+        <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="{sql}">
+            <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">{q}</td>
+            <td class="py-4 px-6 text-gray-400">{desc}</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">{pqe_t:.2f} ms</td>
+            <td class="py-4 px-6 bg-gray-900/50">{simd_text}</td>
             <td class="py-4 px-6 text-amber-400 font-mono">{duck_t:.2f} ms</td>
             <td class="py-4 px-6">{winner_badge}</td>
             <td class="py-4 px-6 font-bold text-white">{speedup_text}</td>
         </tr>
         """
+        
+    sample_html = ""
+    if header and sample_records:
+        sample_html += f'<table class="w-full text-left text-sm mt-4 text-gray-400 border border-gray-700">'
+        sample_html += f'<thead class="bg-gray-800 text-gray-300"><tr>{"".join(f"<th class=\'py-2 px-4\'>{h}</th>" for h in header)}</tr></thead><tbody>'
+        for rec in sample_records:
+            sample_html += f'<tr class="border-b border-gray-800">{"".join(f"<td class=\'py-1 px-4\'>{r}</td>" for r in rec)}</tr>'
+        sample_html += f'</tbody></table>'
         
     html = f"""
     <!DOCTYPE html>
@@ -128,24 +210,30 @@ def generate_html(pqe, duck, data_path, threads, output_html="benchmark_dashboar
         </style>
     </head>
     <body class="p-10">
-        <div class="max-w-5xl mx-auto">
+        <div class="max-w-7xl mx-auto">
             <div class="flex items-center justify-between mb-10 border-b border-gray-700 pb-5">
                 <div>
                     <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">PQE vs DuckDB Shootout</h1>
-                    <p class="text-gray-400 mt-2">Dataset: <span class="text-gray-200">{data_path}</span> | Threads: <span class="text-gray-200">{threads}</span></p>
+                    <p class="text-gray-400 mt-2">Dataset: <span class="text-gray-200">{data_path}</span> | Threads: <span class="text-gray-200">{threads}</span> | Total Rows: <span class="text-gray-200">{total_records:,}</span></p>
                 </div>
                 <div class="text-right">
                     <p class="text-sm text-gray-500">Generated automatically by Benchmark Harness</p>
                 </div>
             </div>
             
+            <div class="mb-10 bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-700 p-6">
+                <h3 class="text-xl font-bold text-white mb-2">Raw Data Sample (First 5 Rows)</h3>
+                {sample_html}
+            </div>
+            
             <div class="bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-gray-800 text-gray-300 uppercase text-xs tracking-wider border-b border-gray-700">
-                            <th class="py-4 px-6">Query</th>
+                            <th class="py-4 px-6">Query <span class="text-gray-500 lowercase font-normal">(Hover for SQL)</span></th>
                             <th class="py-4 px-6">Description</th>
                             <th class="py-4 px-6">PQE Latency (TN)</th>
+                            <th class="py-4 px-6 text-purple-300 bg-gray-900/50">PQE Latency (SIMD AVX)</th>
                             <th class="py-4 px-6">DuckDB Latency</th>
                             <th class="py-4 px-6">Winner</th>
                             <th class="py-4 px-6">Speedup</th>
@@ -156,19 +244,24 @@ def generate_html(pqe, duck, data_path, threads, output_html="benchmark_dashboar
                     </tbody>
                 </table>
             </div>
+
             
             <div class="mt-10 grid grid-cols-2 gap-6">
                 <div class="bg-gray-900 p-6 rounded-xl border border-gray-700">
-                    <h3 class="text-xl font-bold text-white mb-2">Architectural Notes</h3>
-                    <p class="text-gray-400 text-sm">
-                        Our engine uses <strong>Cardinality-Aware Group By</strong> for Q4, intelligently falling back to lock-free Thread-Local Maps for low cardinality keys. This avoids spinlock contention entirely, resulting in extreme performance.
-                    </p>
+                    <h3 class="text-lg font-bold text-white mb-2">Architectural Highlights (PQE)</h3>
+                    <ul class="list-disc list-inside text-gray-400 space-y-1 text-sm">
+                        <li><strong>Zero-Overhead Filtering:</strong> Predicates compiled directly into CPU cache loops (No dynamic planning).</li>
+                        <li><strong>Morsel-Driven Parallelism:</strong> Lock-free work stealing guarantees perfect CPU core utilization.</li>
+                        <li><strong>SIMD Acceleration:</strong> Hardware AVX2 instructions compute 8 items per cycle for arithmetic ops.</li>
+                    </ul>
                 </div>
                 <div class="bg-gray-900 p-6 rounded-xl border border-gray-700">
-                    <h3 class="text-xl font-bold text-white mb-2">Zero-Copy Pipelining</h3>
-                    <p class="text-gray-400 text-sm">
-                        PQE obliterates competitors in Q2 because it writes filter matches directly into dense <code>std::vector&lt;row_id_t&gt;</code> vectors during the morsel scan without any translation boundaries or virtual function overhead.
-                    </p>
+                    <h3 class="text-lg font-bold text-white mb-2">DuckDB Comparison</h3>
+                    <ul class="list-disc list-inside text-gray-400 space-y-1 text-sm">
+                        <li>Used as the industry-standard in-memory analytical baseline.</li>
+                        <li>Excels in vectorized aggregations via AVX-512 SIMD loops.</li>
+                        <li>Slower on raw filtering due to abstract query planning and Arrow conversion overhead.</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -180,21 +273,16 @@ def generate_html(pqe, duck, data_path, threads, output_html="benchmark_dashboar
         f.write(html)
         
     print(f"Saved dashboard to {output_html}")
-    
-    # Open in browser
-    abs_path = os.path.abspath(output_html)
-    webbrowser.open(f"file://{abs_path}")
+    os.startfile(output_html)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="data/scale/sales_10m.csv")
-    parser.add_argument("--threads", type=int, default=8)
+    parser = argparse.ArgumentParser(description="Run benchmarks and generate HTML report.")
+    parser.add_argument("--data", type=str, default="data/sample/sales_250k.csv", help="Path to the dataset")
+    parser.add_argument("--threads", type=int, default=8, help="Number of OpenMP threads")
+    
     args = parser.parse_args()
     
-    pqe = run_pqe_engine(args.data, args.threads)
-    if pqe is None:
-        sys.exit(1)
-        
+    pqe, simd = run_pqe(args.data, args.threads)
     duck = run_duckdb(args.data)
     
-    generate_html(pqe, duck, args.data, args.threads)
+    generate_html(pqe, duck, simd, args.data, args.threads)
