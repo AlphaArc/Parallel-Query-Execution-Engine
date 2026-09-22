@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### [Added]
+- **Phase 4 Concurrency & Synchronization (Layer 4)**:
+  - `SpinLock` (`include/pqe/layer4_concurrency/spin_lock.hpp`): Ultra-low latency user-space spinlock utilizing atomic test-and-set to avoid OS context switches.
+  - `AtomicAccumulator` (`include/pqe/layer4_concurrency/atomic_accumulator.hpp`): Lock-free CAS floating-point addition wrapper.
+  - `ConcurrentShardedMap` (`include/pqe/layer4_concurrency/concurrent_hash_map.hpp`): High-performance lock-free sharded hash map for scalable parallel Group By operations, padded to avoid false sharing.
+  - `SPSCRingBuffer` (`include/pqe/layer4_concurrency/ring_buffer.hpp`): Lock-free single-producer single-consumer ring buffer for IPC.
+- **Phase 5 Advanced Telemetry (Layer 5)**:
+  - `CycleCounter` (`include/pqe/layer5_telemetry/cycle_counter.hpp`): Exact CPU cycle profiling via x86 `__rdtsc()` intrinsic.
+  - Parallel Speedup Profiling (`include/pqe/layer5_telemetry/speedup_calculator.hpp`): Real-time output of Speedup ($S_N$) and Efficiency metrics.
+- **Phase 3 Parallel Execution Engine (Layer 3)**:
+  - OpenMP implementations (`OmpScan`, `OmpFilter`, `OmpAggregator`, `OmpGroupBy`) executing across parallel morsels.
+  - Replaced thread-local hash maps and OpenMP atomic directives with Phase 4 lock-free concurrency structures.
 - **Phase 2 Baseline Sequential Execution Engine (Layer 3)**:
   - `SeqScan` (`include/pqe/layer3_execution/sequential/seq_scan.hpp`, `src/layer3_execution/sequential/seq_scan.cpp`): Single-threaded iterator linearly traversing contiguous columnar memory vectors across entire tables or bounded morsels.
   - `SeqFilter` (`include/pqe/layer3_execution/sequential/seq_filter.hpp`, `src/layer3_execution/sequential/seq_filter.cpp`): Predicate evaluation engine emitting dense row selection vectors (`std::vector<row_id_t>`) for downstream zero-copy pipelining.
