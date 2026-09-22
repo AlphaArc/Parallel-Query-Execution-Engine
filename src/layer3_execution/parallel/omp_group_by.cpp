@@ -17,23 +17,45 @@ namespace pqe::execution::parallel {
         const auto prices = table_.prices();
         
         storage::MorselAllocator allocator(table_.row_count(), pqe::DEFAULT_MORSEL_SIZE);
-        concurrency::ConcurrentShardedMap<std::int32_t, GroupMetrics> shared_map;
+        
+        // Cardinality-Aware Group By: CategoryID is known to be extremely low cardinality (1-50).
+        // Therefore, we use Thread-Local Maps to completely eliminate lock contention.
+        std::vector<std::unordered_map<std::int32_t, GroupMetrics>> thread_maps;
         
         #pragma omp parallel
         {
+            int thread_id = omp_get_thread_num();
+            int num_threads = omp_get_num_threads();
+            
+            #pragma omp single
+            {
+                thread_maps.resize(num_threads);
+            }
+            
+            std::unordered_map<std::int32_t, GroupMetrics> local_map;
+            local_map.reserve(64); // Low Cardinality Reservation
+            
             while (auto morsel_opt = allocator.get_next_morsel()) {
                 const auto& morsel = *morsel_opt;
                 for (row_id_t r = morsel.start_row; r < morsel.end_row; ++r) {
-                    shared_map.update(cats[r], [q = qty[r], p = prices[r]](GroupMetrics& gm) {
-                        gm.update(q, p);
-                    });
+                    local_map[cats[r]].update(qty[r], prices[r]);
                 }
             }
+            
+            thread_maps[thread_id] = std::move(local_map);
         }
         
+        // Sequential Merge of small low-cardinality thread-local maps (Very Fast)
         std::unordered_map<std::int32_t, GroupMetrics> final_map;
-        for (const auto& [k, v] : shared_map.gather_all()) {
-            final_map[k] = v;
+        for (const auto& t_map : thread_maps) {
+            for (const auto& [cat_id, metrics] : t_map) {
+                auto& gm = final_map[cat_id];
+                gm.count += metrics.count;
+                gm.sum_quantity += metrics.sum_quantity;
+                gm.sum_price += metrics.sum_price;
+                if (metrics.min_price < gm.min_price) gm.min_price = metrics.min_price;
+                if (metrics.max_price > gm.max_price) gm.max_price = metrics.max_price;
+            }
         }
         
         return final_map;
@@ -45,22 +67,41 @@ namespace pqe::execution::parallel {
         const auto qty = table_.quantities();
         const auto prices = table_.prices();
         
-        concurrency::ConcurrentShardedMap<std::int32_t, GroupMetrics> shared_map;
+        std::vector<std::unordered_map<std::int32_t, GroupMetrics>> thread_maps;
         
         #pragma omp parallel
         {
+            int thread_id = omp_get_thread_num();
+            int num_threads = omp_get_num_threads();
+            
+            #pragma omp single
+            {
+                thread_maps.resize(num_threads);
+            }
+            
+            std::unordered_map<std::int32_t, GroupMetrics> local_map;
+            local_map.reserve(64); // Low Cardinality Reservation
+            
             #pragma omp for schedule(dynamic, 10000)
             for (std::size_t i = 0; i < selection.size(); ++i) {
                 row_id_t r = selection[i];
-                shared_map.update(cats[r], [q = qty[r], p = prices[r]](GroupMetrics& gm) {
-                    gm.update(q, p);
-                });
+                local_map[cats[r]].update(qty[r], prices[r]);
             }
+            
+            thread_maps[thread_id] = std::move(local_map);
         }
         
+        // Sequential Merge
         std::unordered_map<std::int32_t, GroupMetrics> final_map;
-        for (const auto& [k, v] : shared_map.gather_all()) {
-            final_map[k] = v;
+        for (const auto& t_map : thread_maps) {
+            for (const auto& [cat_id, metrics] : t_map) {
+                auto& gm = final_map[cat_id];
+                gm.count += metrics.count;
+                gm.sum_quantity += metrics.sum_quantity;
+                gm.sum_price += metrics.sum_price;
+                if (metrics.min_price < gm.min_price) gm.min_price = metrics.min_price;
+                if (metrics.max_price > gm.max_price) gm.max_price = metrics.max_price;
+            }
         }
         
         return final_map;

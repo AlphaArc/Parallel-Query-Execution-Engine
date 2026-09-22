@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### [Added]
+- **Cardinality-Aware Group By & Automation (Phase 6)**:
+  - `OmpGroupBy` now dynamically selects Lock-Free Thread-Local maps for low-cardinality keys (`CategoryID`), completely eliminating the lock contention bottleneck.
+  - Developed unified `scripts/run_benchmarks_and_report.py` to automatically execute the C++ engine, run DuckDB baselines, and generate/open a Tailwind CSS HTML comparison dashboard.
 - **Phase 4 Concurrency & Synchronization (Layer 4)**:
   - `SpinLock` (`include/pqe/layer4_concurrency/spin_lock.hpp`): Ultra-low latency user-space spinlock utilizing atomic test-and-set to avoid OS context switches.
   - `AtomicAccumulator` (`include/pqe/layer4_concurrency/atomic_accumulator.hpp`): Lock-free CAS floating-point addition wrapper.
