@@ -1,6 +1,8 @@
 #include "pqe/layer3_execution/parallel/omp_aggregator.hpp"
 #include "pqe/layer1_storage/morsel_allocator.hpp"
 
+#include "pqe/layer4_concurrency/atomic_accumulator.hpp"
+
 #include <omp.h>
 #include <algorithm>
 #include <limits>
@@ -21,7 +23,7 @@ namespace pqe::execution::parallel {
     double OmpAggregator::sum_price() const noexcept {
         const auto prices = table_.prices();
         storage::MorselAllocator allocator(table_.row_count(), pqe::DEFAULT_MORSEL_SIZE);
-        double global_sum = 0.0;
+        concurrency::AtomicAccumulator<double> global_sum(0.0);
 
         #pragma omp parallel
         {
@@ -32,27 +34,31 @@ namespace pqe::execution::parallel {
                     local_sum += prices[r];
                 }
             }
-            #pragma omp atomic
-            global_sum += local_sum;
+            global_sum.add(local_sum);
         }
-        return global_sum;
+        return global_sum.load();
     }
 
     double OmpAggregator::sum_price(const std::vector<row_id_t>& selection) const noexcept {
         const auto prices = table_.prices();
-        double global_sum = 0.0;
+        concurrency::AtomicAccumulator<double> global_sum(0.0);
 
-        #pragma omp parallel for reduction(+:global_sum) schedule(dynamic, 10000)
-        for (std::size_t i = 0; i < selection.size(); ++i) {
-            global_sum += prices[selection[i]];
+        #pragma omp parallel
+        {
+            double local_sum = 0.0;
+            #pragma omp for schedule(dynamic, 10000)
+            for (std::size_t i = 0; i < selection.size(); ++i) {
+                local_sum += prices[selection[i]];
+            }
+            global_sum.add(local_sum);
         }
-        return global_sum;
+        return global_sum.load();
     }
 
     std::int64_t OmpAggregator::sum_quantity() const noexcept {
         const auto qty = table_.quantities();
         storage::MorselAllocator allocator(table_.row_count(), pqe::DEFAULT_MORSEL_SIZE);
-        std::int64_t global_sum = 0;
+        concurrency::AtomicAccumulator<std::int64_t> global_sum(0);
 
         #pragma omp parallel
         {
@@ -63,31 +69,35 @@ namespace pqe::execution::parallel {
                     local_sum += qty[r];
                 }
             }
-            #pragma omp atomic
-            global_sum += local_sum;
+            global_sum.add(local_sum);
         }
-        return global_sum;
+        return global_sum.load();
     }
 
     std::int64_t OmpAggregator::sum_quantity(const std::vector<row_id_t>& selection) const noexcept {
         const auto qty = table_.quantities();
-        std::int64_t global_sum = 0;
+        concurrency::AtomicAccumulator<std::int64_t> global_sum(0);
 
-        #pragma omp parallel for reduction(+:global_sum) schedule(dynamic, 10000)
-        for (std::size_t i = 0; i < selection.size(); ++i) {
-            global_sum += qty[selection[i]];
+        #pragma omp parallel
+        {
+            std::int64_t local_sum = 0;
+            #pragma omp for schedule(dynamic, 10000)
+            for (std::size_t i = 0; i < selection.size(); ++i) {
+                local_sum += qty[selection[i]];
+            }
+            global_sum.add(local_sum);
         }
-        return global_sum;
+        return global_sum.load();
     }
 
     ScalarAggregateResult OmpAggregator::aggregate_price() const noexcept {
         const auto prices = table_.prices();
         storage::MorselAllocator allocator(table_.row_count(), pqe::DEFAULT_MORSEL_SIZE);
 
-        std::size_t total_count = 0;
-        double total_sum = 0.0;
-        double global_min = std::numeric_limits<double>::infinity();
-        double global_max = -std::numeric_limits<double>::infinity();
+        concurrency::AtomicAccumulator<std::size_t> total_count(0);
+        concurrency::AtomicAccumulator<double> total_sum(0.0);
+        concurrency::AtomicAccumulator<double> global_min(std::numeric_limits<double>::infinity());
+        concurrency::AtomicAccumulator<double> global_max(-std::numeric_limits<double>::infinity());
 
         #pragma omp parallel
         {
@@ -107,31 +117,28 @@ namespace pqe::execution::parallel {
                 }
             }
 
-            #pragma omp critical
-            {
-                total_count += local_count;
-                total_sum += local_sum;
-                if (local_min < global_min) global_min = local_min;
-                if (local_max > global_max) global_max = local_max;
-            }
+            total_count.add(local_count);
+            total_sum.add(local_sum);
+            global_min.update_min(local_min);
+            global_max.update_max(local_max);
         }
 
         ScalarAggregateResult res;
-        res.count = total_count;
-        res.sum = total_sum;
-        res.avg = (total_count > 0) ? (total_sum / static_cast<double>(total_count)) : 0.0;
-        res.min = global_min;
-        res.max = global_max;
+        res.count = total_count.load();
+        res.sum = total_sum.load();
+        res.avg = (res.count > 0) ? (res.sum / static_cast<double>(res.count)) : 0.0;
+        res.min = global_min.load();
+        res.max = global_max.load();
         return res;
     }
 
     ScalarAggregateResult OmpAggregator::aggregate_price(const std::vector<row_id_t>& selection) const noexcept {
         const auto prices = table_.prices();
 
-        std::size_t total_count = 0;
-        double total_sum = 0.0;
-        double global_min = std::numeric_limits<double>::infinity();
-        double global_max = -std::numeric_limits<double>::infinity();
+        concurrency::AtomicAccumulator<std::size_t> total_count(0);
+        concurrency::AtomicAccumulator<double> total_sum(0.0);
+        concurrency::AtomicAccumulator<double> global_min(std::numeric_limits<double>::infinity());
+        concurrency::AtomicAccumulator<double> global_max(-std::numeric_limits<double>::infinity());
 
         #pragma omp parallel
         {
@@ -149,21 +156,18 @@ namespace pqe::execution::parallel {
                 if (p > local_max) local_max = p;
             }
 
-            #pragma omp critical
-            {
-                total_count += local_count;
-                total_sum += local_sum;
-                if (local_min < global_min) global_min = local_min;
-                if (local_max > global_max) global_max = local_max;
-            }
+            total_count.add(local_count);
+            total_sum.add(local_sum);
+            global_min.update_min(local_min);
+            global_max.update_max(local_max);
         }
 
         ScalarAggregateResult res;
-        res.count = total_count;
-        res.sum = total_sum;
-        res.avg = (total_count > 0) ? (total_sum / static_cast<double>(total_count)) : 0.0;
-        res.min = global_min;
-        res.max = global_max;
+        res.count = total_count.load();
+        res.sum = total_sum.load();
+        res.avg = (res.count > 0) ? (res.sum / static_cast<double>(res.count)) : 0.0;
+        res.min = global_min.load();
+        res.max = global_max.load();
         return res;
     }
 
@@ -172,7 +176,7 @@ namespace pqe::execution::parallel {
         const auto discounts = table_.discounts();
         const auto qty = table_.quantities();
         storage::MorselAllocator allocator(table_.row_count(), pqe::DEFAULT_MORSEL_SIZE);
-        double global_sum = 0.0;
+        concurrency::AtomicAccumulator<double> global_sum(0.0);
 
         #pragma omp parallel
         {
@@ -183,24 +187,28 @@ namespace pqe::execution::parallel {
                     local_sum += static_cast<double>(prices[r]) * (1.0 - static_cast<double>(discounts[r])) * static_cast<double>(qty[r]);
                 }
             }
-            #pragma omp atomic
-            global_sum += local_sum;
+            global_sum.add(local_sum);
         }
-        return global_sum;
+        return global_sum.load();
     }
 
     double OmpAggregator::sum_net_sales(const std::vector<row_id_t>& selection) const noexcept {
         const auto prices = table_.prices();
         const auto discounts = table_.discounts();
         const auto qty = table_.quantities();
-        double global_sum = 0.0;
+        concurrency::AtomicAccumulator<double> global_sum(0.0);
 
-        #pragma omp parallel for reduction(+:global_sum) schedule(dynamic, 10000)
-        for (std::size_t i = 0; i < selection.size(); ++i) {
-            row_id_t r = selection[i];
-            global_sum += static_cast<double>(prices[r]) * (1.0 - static_cast<double>(discounts[r])) * static_cast<double>(qty[r]);
+        #pragma omp parallel
+        {
+            double local_sum = 0.0;
+            #pragma omp for schedule(dynamic, 10000)
+            for (std::size_t i = 0; i < selection.size(); ++i) {
+                row_id_t r = selection[i];
+                local_sum += static_cast<double>(prices[r]) * (1.0 - static_cast<double>(discounts[r])) * static_cast<double>(qty[r]);
+            }
+            global_sum.add(local_sum);
         }
-        return global_sum;
+        return global_sum.load();
     }
 
 } // namespace pqe::execution::parallel

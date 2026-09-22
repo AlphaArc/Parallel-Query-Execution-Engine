@@ -26,6 +26,8 @@ namespace pqe::telemetry {
         void print_report() const {
             std::cout << "[TELEMETRY - PARALLEL SPEEDUP] " << seq_metrics.query_name << ":\n"
                       << "  -> Threads Used:   " << threads_used << "\n"
+                      << "  -> Seq Cycles:     " << seq_metrics.cpu_cycles << "\n"
+                      << "  -> Par Cycles:     " << par_metrics.cpu_cycles << "\n"
                       << "  -> Seq Time (T1):  " << std::fixed << std::setprecision(2) << seq_metrics.duration_milliseconds << " ms\n"
                       << "  -> Par Time (TN):  " << std::fixed << std::setprecision(2) << par_metrics.duration_milliseconds << " ms\n"
                       << "  -> Speedup (S_N):  " << std::fixed << std::setprecision(2) << speedup() << "x\n"
