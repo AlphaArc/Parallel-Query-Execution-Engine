@@ -45,6 +45,7 @@ else()
         -Wshadow 
         -Wunused
         -mavx2
+        -mstackrealign
     )
     if(USE_SANITIZERS)
         list(APPEND PQE_WARNING_FLAGS -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC)

@@ -22,6 +22,19 @@
                 </div>
             </div>
             
+            <div class="mb-10 grid grid-cols-2 gap-4">
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-600">
+                    <h4 class="text-md font-bold text-gray-300 mb-1">Execution Metadata</h4>
+                    <p class="text-sm text-gray-400">Timestamp: <span class="text-emerald-400 font-mono">2026-09-23 03:45:35</span></p>
+                    <p class="text-sm text-gray-400">OS: <span class="text-blue-300">Windows 11 (AMD64)</span></p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-600">
+                    <h4 class="text-md font-bold text-gray-300 mb-1">Environment</h4>
+                    <p class="text-sm text-gray-400">Python Version: <span class="text-yellow-400">3.14.6</span></p>
+                    <p class="text-sm text-gray-400">DuckDB Version: <span class="text-yellow-400">1.5.5</span></p>
+                </div>
+            </div>
+            
             <div class="mb-10 bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-700 p-6">
                 <h3 class="text-xl font-bold text-white mb-2">Raw Data Sample (First 5 Rows)</h3>
                 <table class="w-full text-left text-sm mt-4 text-gray-400 border border-gray-700"><thead class="bg-gray-800 text-gray-300"><tr><th class='py-2 px-4'>TransactionID</th><th class='py-2 px-4'>CustomerID</th><th class='py-2 px-4'>Quantity</th><th class='py-2 px-4'>Price</th><th class='py-2 px-4'>Discount</th><th class='py-2 px-4'>CategoryID</th><th class='py-2 px-4'>StoreRegion</th></tr></thead><tbody><tr class="border-b border-gray-800"><td class='py-1 px-4'>1</td><td class='py-1 px-4'>83811</td><td class='py-1 px-4'>15</td><td class='py-1 px-4'>42.39</td><td class='py-1 px-4'>0.10</td><td class='py-1 px-4'>16</td><td class='py-1 px-4'>South</td></tr><tr class="border-b border-gray-800"><td class='py-1 px-4'>2</td><td class='py-1 px-4'>18290</td><td class='py-1 px-4'>95</td><td class='py-1 px-4'>158.23</td><td class='py-1 px-4'>0.25</td><td class='py-1 px-4'>35</td><td class='py-1 px-4'>North</td></tr><tr class="border-b border-gray-800"><td class='py-1 px-4'>3</td><td class='py-1 px-4'>77398</td><td class='py-1 px-4'>55</td><td class='py-1 px-4'>52.52</td><td class='py-1 px-4'>0.00</td><td class='py-1 px-4'>14</td><td class='py-1 px-4'>South</td></tr><tr class="border-b border-gray-800"><td class='py-1 px-4'>4</td><td class='py-1 px-4'>66238</td><td class='py-1 px-4'>78</td><td class='py-1 px-4'>44.67</td><td class='py-1 px-4'>0.05</td><td class='py-1 px-4'>46</td><td class='py-1 px-4'>Central</td></tr><tr class="border-b border-gray-800"><td class='py-1 px-4'>5</td><td class='py-1 px-4'>54988</td><td class='py-1 px-4'>29</td><td class='py-1 px-4'>676.57</td><td class='py-1 px-4'>0.10</td><td class='py-1 px-4'>1</td><td class='py-1 px-4'>South</td></tr></tbody></table>
@@ -47,7 +60,7 @@
             <td class="py-4 px-6 text-gray-400">Full Table Scan (COUNT)</td>
             <td class="py-4 px-6 text-emerald-400 font-mono">0.00 ms</td>
             <td class="py-4 px-6 bg-gray-900/50"><span class="text-gray-600">-</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">3.15 ms</td>
+            <td class="py-4 px-6 text-amber-400 font-mono">3.06 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
             <td class="py-4 px-6 font-bold text-white">Infinite (Metadata)</td>
         </tr>
@@ -55,49 +68,49 @@
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT * FROM sales WHERE Quantity > 50 AND CategoryID = 10;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q2</td>
             <td class="py-4 px-6 text-gray-400">Dense Filter (Qty > 50 & Cat = 10)</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">33.62 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">34.18 ms</td>
             <td class="py-4 px-6 bg-gray-900/50"><span class="text-gray-600">-</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">1917.44 ms</td>
+            <td class="py-4 px-6 text-amber-400 font-mono">1515.37 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
-            <td class="py-4 px-6 font-bold text-white">57.03x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">44.34x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT COUNT(*), SUM(Price), AVG(Price), MIN(Price), MAX(Price) FROM sales WHERE Quantity > 50;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q3</td>
             <td class="py-4 px-6 text-gray-400">Filter + Multi-Metric Aggregation</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">123.54 ms</td>
-            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">11.30 ms</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">70.85 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">100.18 ms</td>
+            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">12.18 ms</span></td>
+            <td class="py-4 px-6 text-amber-400 font-mono">53.76 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
-            <td class="py-4 px-6 font-bold text-white">6.27x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">4.41x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT CategoryID, COUNT(*), SUM(Quantity), SUM(Price), MIN(Price), MAX(Price) FROM sales GROUP BY CategoryID;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q4</td>
             <td class="py-4 px-6 text-gray-400">Hash GROUP BY CategoryID</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">174.80 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">131.24 ms</td>
             <td class="py-4 px-6 bg-gray-900/50"><span class="text-gray-600">-</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">143.28 ms</td>
-            <td class="py-4 px-6"><span class="bg-yellow-900 text-yellow-300 py-1 px-3 rounded-full text-xs font-bold">DuckDB</span></td>
-            <td class="py-4 px-6 font-bold text-white">1.22x Faster</td>
+            <td class="py-4 px-6 text-amber-400 font-mono">132.19 ms</td>
+            <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
+            <td class="py-4 px-6 font-bold text-white">1.01x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales WHERE CategoryID = 1;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q5</td>
             <td class="py-4 px-6 text-gray-400">Filter + Net Sales Arithmetic</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">16.77 ms</td>
-            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">5.28 ms</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">39.54 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">18.40 ms</td>
+            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">8.15 ms</span></td>
+            <td class="py-4 px-6 text-amber-400 font-mono">40.99 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
-            <td class="py-4 px-6 font-bold text-white">7.49x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">5.03x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT COUNT(*) FROM sales WHERE Quantity > 90;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q6</td>
             <td class="py-4 px-6 text-gray-400">High-Selectivity Filter</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">27.29 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">26.40 ms</td>
             <td class="py-4 px-6 bg-gray-900/50"><span class="text-gray-600">-</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">16.81 ms</td>
+            <td class="py-4 px-6 text-amber-400 font-mono">16.27 ms</td>
             <td class="py-4 px-6"><span class="bg-yellow-900 text-yellow-300 py-1 px-3 rounded-full text-xs font-bold">DuckDB</span></td>
             <td class="py-4 px-6 font-bold text-white">1.62x Faster</td>
         </tr>
@@ -105,41 +118,41 @@
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT COUNT(*), SUM(Price), ... FROM sales WHERE Quantity > 20 AND CategoryID = 5;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q7</td>
             <td class="py-4 px-6 text-gray-400">Multi-Predicate + Multi-Metric Agg</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">23.22 ms</td>
-            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">1.14 ms</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">31.28 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">24.27 ms</td>
+            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">2.28 ms</span></td>
+            <td class="py-4 px-6 text-amber-400 font-mono">37.38 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
-            <td class="py-4 px-6 font-bold text-white">27.44x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">16.39x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT CategoryID, COUNT(*), ... FROM sales WHERE Quantity > 50 GROUP BY CategoryID;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q8</td>
             <td class="py-4 px-6 text-gray-400">Filtered Hash GROUP BY</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">152.62 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">135.10 ms</td>
             <td class="py-4 px-6 bg-gray-900/50"><span class="text-gray-600">-</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">88.90 ms</td>
+            <td class="py-4 px-6 text-amber-400 font-mono">83.23 ms</td>
             <td class="py-4 px-6"><span class="bg-yellow-900 text-yellow-300 py-1 px-3 rounded-full text-xs font-bold">DuckDB</span></td>
-            <td class="py-4 px-6 font-bold text-white">1.72x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">1.62x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q9</td>
             <td class="py-4 px-6 text-gray-400">Full Table Arithmetic Aggregation</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">18.58 ms</td>
-            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">18.41 ms</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">53.32 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">19.96 ms</td>
+            <td class="py-4 px-6 bg-gray-900/50"><span class="text-purple-400 font-mono font-bold">20.12 ms</span></td>
+            <td class="py-4 px-6 text-amber-400 font-mono">45.04 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
-            <td class="py-4 px-6 font-bold text-white">2.90x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">2.26x Faster</td>
         </tr>
         
         <tr class="border-b border-gray-700 hover:bg-gray-800 transition" title="SELECT SUM(Quantity) FROM sales WHERE CategoryID = 20;">
             <td class="py-4 px-6 font-medium text-white underline decoration-dotted cursor-help">Q10</td>
             <td class="py-4 px-6 text-gray-400">Single-Column Scalar Reduction</td>
-            <td class="py-4 px-6 text-emerald-400 font-mono">12.82 ms</td>
+            <td class="py-4 px-6 text-emerald-400 font-mono">13.12 ms</td>
             <td class="py-4 px-6 bg-gray-900/50"><span class="text-gray-600">-</span></td>
-            <td class="py-4 px-6 text-amber-400 font-mono">27.92 ms</td>
+            <td class="py-4 px-6 text-amber-400 font-mono">22.51 ms</td>
             <td class="py-4 px-6"><span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">PQE Engine</span></td>
-            <td class="py-4 px-6 font-bold text-white">2.18x Faster</td>
+            <td class="py-4 px-6 font-bold text-white">1.72x Faster</td>
         </tr>
         
                     </tbody>
@@ -160,8 +173,8 @@
                     <h3 class="text-lg font-bold text-white mb-2">DuckDB Comparison</h3>
                     <ul class="list-disc list-inside text-gray-400 space-y-1 text-sm">
                         <li>Used as the industry-standard in-memory analytical baseline.</li>
-                        <li>Excels in vectorized aggregations via AVX-512 SIMD loops.</li>
-                        <li>Slower on raw filtering due to abstract query planning and Arrow conversion overhead.</li>
+                        <li>Excels in heavy <strong>Hash GROUP BY</strong> operations (e.g., Q4, Q8) and complex scalar reductions (Q10) utilizing AVX-512 SIMD loops and highly optimized hash table probing.</li>
+                        <li>Slower on raw scanning and filtering (e.g., Q1, Q2, Q3) compared to PQE due to abstract query planning, overhead of dynamic dispatch, and runtime Arrow batch conversion overhead.</li>
                     </ul>
                 </div>
             </div>

@@ -6,10 +6,20 @@ import time
 import argparse
 import os
 import webbrowser
+import platform
+import datetime
 
 def run_pqe_engine(data_path, threads):
     print(f"Running PQE Engine on {threads} threads...")
-    cmd = [r".\build\bin\pqe_engine.exe", "--data", data_path, "--run-queries", "--threads", str(threads)]
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    exe_path = os.path.join(base_dir, "build", "bin", "pqe_engine.exe")
+    
+    if not os.path.exists(exe_path):
+        print(f"Error: Executable not found at {exe_path}.")
+        print("Please rebuild the C++ engine (e.g. `cmake -B build` and `cmake --build build --config Release`)")
+        sys.exit(1)
+        
+    cmd = [exe_path, "--data", data_path, "--run-queries", "--threads", str(threads)]
     
     # We will use shell=True on windows if needed, but direct execution is safer
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -197,6 +207,11 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
             sample_html += f'<tr class="border-b border-gray-800">{"".join(f"<td class=\'py-1 px-4\'>{r}</td>" for r in rec)}</tr>'
         sample_html += f'</tbody></table>'
         
+    run_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    os_info = f"{platform.system()} {platform.release()} ({platform.machine()})"
+    py_ver = platform.python_version()
+    db_ver = duckdb.__version__
+        
     html = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -218,6 +233,19 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
                 </div>
                 <div class="text-right">
                     <p class="text-sm text-gray-500">Generated automatically by Benchmark Harness</p>
+                </div>
+            </div>
+            
+            <div class="mb-10 grid grid-cols-2 gap-4">
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-600">
+                    <h4 class="text-md font-bold text-gray-300 mb-1">Execution Metadata</h4>
+                    <p class="text-sm text-gray-400">Timestamp: <span class="text-emerald-400 font-mono">{run_timestamp}</span></p>
+                    <p class="text-sm text-gray-400">OS: <span class="text-blue-300">{os_info}</span></p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-600">
+                    <h4 class="text-md font-bold text-gray-300 mb-1">Environment</h4>
+                    <p class="text-sm text-gray-400">Python Version: <span class="text-yellow-400">{py_ver}</span></p>
+                    <p class="text-sm text-gray-400">DuckDB Version: <span class="text-yellow-400">{db_ver}</span></p>
                 </div>
             </div>
             
@@ -259,8 +287,8 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
                     <h3 class="text-lg font-bold text-white mb-2">DuckDB Comparison</h3>
                     <ul class="list-disc list-inside text-gray-400 space-y-1 text-sm">
                         <li>Used as the industry-standard in-memory analytical baseline.</li>
-                        <li>Excels in vectorized aggregations via AVX-512 SIMD loops.</li>
-                        <li>Slower on raw filtering due to abstract query planning and Arrow conversion overhead.</li>
+                        <li>Excels in heavy <strong>Hash GROUP BY</strong> operations (e.g., Q4, Q8) and complex scalar reductions (Q10) utilizing AVX-512 SIMD loops and highly optimized hash table probing.</li>
+                        <li>Slower on raw scanning and filtering (e.g., Q1, Q2, Q3) compared to PQE due to abstract query planning, overhead of dynamic dispatch, and runtime Arrow batch conversion overhead.</li>
                     </ul>
                 </div>
             </div>
@@ -273,7 +301,16 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
         f.write(html)
         
     print(f"Saved dashboard to {output_html}")
-    os.startfile(output_html)
+    
+    try:
+        # Fallback to webbrowser if os.startfile fails or is not robust
+        file_url = 'file://' + os.path.abspath(output_html).replace('\\', '/')
+        webbrowser.open(file_url)
+    except Exception:
+        try:
+            os.startfile(output_html)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run benchmarks and generate HTML report.")

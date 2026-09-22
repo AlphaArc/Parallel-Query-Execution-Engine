@@ -103,6 +103,15 @@ g++ --version
 python --version
 ```
 
+### Python Dependencies
+
+The data generation and benchmarking scripts require Python. The benchmark script uses `duckdb` to provide a baseline comparison.
+
+```powershell
+# Install the required Python packages
+pip install duckdb
+```
+
 ---
 
 ### 2. Synthetic Data Generation
@@ -157,3 +166,27 @@ To remove compiled binaries and intermediate build state:
 # Remove build directory
 Remove-Item -Recurse -Force build
 ```
+
+---
+
+### 6. Cloning & Replicating the Benchmarks
+
+To clone this repository and replicate the dashboard results, follow these steps:
+
+```powershell
+# 1. Clone the repository
+git clone <repository_url>
+cd "Parallel Query Execution Engine"
+
+# 2. Build the project in Release mode
+cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+
+# 3. Generate a large scale dataset (e.g. 50 Million rows)
+python scripts/generate_sales_data.py --rows 50000000 --out data/scale/sales_50m.csv
+
+# 4. Run the benchmark harness to compare against DuckDB
+python scripts/run_benchmarks_and_report.py --data data/scale/sales_50m.csv --threads 8
+```
+
+This will automatically execute all 10 queries on both PQE and DuckDB, and open an HTML dashboard (`benchmark_dashboard.html`) in your browser visualizing the speedup, execution times, and architecture comparisons.

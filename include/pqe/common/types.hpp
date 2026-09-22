@@ -7,7 +7,7 @@
 
 namespace pqe {
 
-    using row_id_t = std::size_t;
+    using row_id_t = std::uint32_t;
     using morsel_id_t = std::size_t;
 
     inline constexpr std::size_t DEFAULT_MORSEL_SIZE = 100'000;

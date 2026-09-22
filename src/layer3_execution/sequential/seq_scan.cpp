@@ -8,13 +8,13 @@ namespace pqe::execution::sequential {
     SeqScan::SeqScan(const storage::ColumnarTable& table, row_id_t start_row, row_id_t end_row) noexcept
         : table_(table),
           start_row_(start_row),
-          end_row_(std::min(end_row, table.row_count())),
+          end_row_(std::min(end_row, static_cast<pqe::row_id_t>(table.row_count()))),
           current_idx_(start_row) {}
 
     SeqScan::SeqScan(const storage::ColumnarTable& table, const MorselDesc& morsel) noexcept
         : table_(table),
           start_row_(morsel.start_row),
-          end_row_(std::min(morsel.end_row, table.row_count())),
+          end_row_(std::min(morsel.end_row, static_cast<pqe::row_id_t>(table.row_count()))),
           current_idx_(morsel.start_row) {}
 
     void SeqScan::reset() noexcept {
