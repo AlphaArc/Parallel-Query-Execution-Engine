@@ -148,16 +148,16 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
         header = []
 
     queries = {
-        "Q1": ("Full Table Scan (COUNT)", "SELECT COUNT(*) FROM sales;"),
-        "Q2": ("Dense Filter (Qty > 50 & Cat = 10)", "SELECT * FROM sales WHERE Quantity > 50 AND CategoryID = 10;"),
-        "Q3": ("Filter + Multi-Metric Aggregation", "SELECT COUNT(*), SUM(Price), AVG(Price), MIN(Price), MAX(Price) FROM sales WHERE Quantity > 50;"),
-        "Q4": ("Hash GROUP BY CategoryID", "SELECT CategoryID, COUNT(*), SUM(Quantity), SUM(Price), MIN(Price), MAX(Price) FROM sales GROUP BY CategoryID;"),
-        "Q5": ("Filter + Net Sales Arithmetic", "SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales WHERE CategoryID = 1;"),
-        "Q6": ("High-Selectivity Filter", "SELECT COUNT(*) FROM sales WHERE Quantity > 90;"),
-        "Q7": ("Multi-Predicate + Multi-Metric Agg", "SELECT COUNT(*), SUM(Price), ... FROM sales WHERE Quantity > 20 AND CategoryID = 5;"),
-        "Q8": ("Filtered Hash GROUP BY", "SELECT CategoryID, COUNT(*), ... FROM sales WHERE Quantity > 50 GROUP BY CategoryID;"),
-        "Q9": ("Full Table Arithmetic Aggregation", "SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales;"),
-        "Q10": ("Single-Column Scalar Reduction", "SELECT SUM(Quantity) FROM sales WHERE CategoryID = 20;")
+        "Q1": ("Full Table Scan (COUNT)", "SELECT COUNT(*) FROM sales;", "Compiled predicate loops avoiding query planning overhead", "Highly vectorized parallel counting"),
+        "Q2": ("Dense Filter (Qty > 50 & Cat = 10)", "SELECT * FROM sales WHERE Quantity > 50 AND CategoryID = 10;", "Zero-copy scanning and tight JIT-like loop without Arrow conversion overhead", "AVX-512 filter pushdown"),
+        "Q3": ("Filter + Multi-Metric Aggregation", "SELECT COUNT(*), SUM(Price), AVG(Price), MIN(Price), MAX(Price) FROM sales WHERE Quantity > 50;", "Fast contiguous columnar scalar aggregation", "Vectorized AVX arithmetic"),
+        "Q4": ("Hash GROUP BY CategoryID", "SELECT CategoryID, COUNT(*), SUM(Quantity), SUM(Price), MIN(Price), MAX(Price) FROM sales GROUP BY CategoryID;", "Lock-free Thread-Local Maps for low cardinality", "Highly optimized hash table probing and vectorization"),
+        "Q5": ("Filter + Net Sales Arithmetic", "SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales WHERE CategoryID = 1;", "Hardware SIMD AVX2 intrinsic arithmetic", "Vectorized abstract arithmetic execution"),
+        "Q6": ("High-Selectivity Filter", "SELECT COUNT(*) FROM sales WHERE Quantity > 90;", "Dense row selection via sequential scanning", "Optimized filter pushdown"),
+        "Q7": ("Multi-Predicate + Multi-Metric Agg", "SELECT COUNT(*), SUM(Price), ... FROM sales WHERE Quantity > 20 AND CategoryID = 5;", "Cache-conscious contiguous vector sweeps", "AVX-512 multi-metric aggregations"),
+        "Q8": ("Filtered Hash GROUP BY", "SELECT CategoryID, COUNT(*), ... FROM sales WHERE Quantity > 50 GROUP BY CategoryID;", "Zero-copy pipelining to lock-free sharded maps", "AVX-512 SIMD loops and hash probing"),
+        "Q9": ("Full Table Arithmetic Aggregation", "SELECT SUM(Price * (1.0 - Discount) * Quantity) FROM sales;", "Hardware SIMD AVX2 intrinsic arithmetic", "Vectorized batch execution"),
+        "Q10": ("Single-Column Scalar Reduction", "SELECT SUM(Quantity) FROM sales WHERE CategoryID = 20;", "Direct tight loop scalar processing", "Complex scalar reductions using AVX-512")
     }
     
     rows_html = ""
@@ -167,7 +167,7 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
         duck_t = duck.get(q, 0.0)
         simd_t = simd.get(q, None)
         
-        desc, sql = queries.get(q, ("Unknown", ""))
+        desc, sql, pqe_win, duck_win = queries.get(q, ("Unknown", "", "Compiled performance", "Vectorized performance"))
         
         best_pqe = min(pqe_t, simd_t) if simd_t is not None else pqe_t
         
@@ -183,6 +183,8 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
             speedup = best_pqe / max(duck_t, 0.001)
             speedup_text = f"{speedup:.2f}x Faster"
             
+        reason = pqe_win if winner == "PQE Engine" else duck_win
+            
         winner_badge = f'<span class="bg-blue-900 text-blue-300 py-1 px-3 rounded-full text-xs font-bold">{winner}</span>' if winner == "PQE Engine" else f'<span class="bg-yellow-900 text-yellow-300 py-1 px-3 rounded-full text-xs font-bold">{winner}</span>'
         
         simd_text = f'<span class="text-purple-400 font-mono font-bold">{simd_t:.2f} ms</span>' if simd_t is not None else '<span class="text-gray-600">-</span>'
@@ -196,6 +198,7 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
             <td class="py-4 px-6 text-amber-400 font-mono">{duck_t:.2f} ms</td>
             <td class="py-4 px-6">{winner_badge}</td>
             <td class="py-4 px-6 font-bold text-white">{speedup_text}</td>
+            <td class="py-4 px-6 text-sm text-gray-300 italic">{reason}</td>
         </tr>
         """
         
@@ -265,6 +268,7 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
                             <th class="py-4 px-6">DuckDB Latency</th>
                             <th class="py-4 px-6">Winner</th>
                             <th class="py-4 px-6">Speedup</th>
+                            <th class="py-4 px-6 w-1/4">Analysis</th>
                         </tr>
                     </thead>
                     <tbody>
