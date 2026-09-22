@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### [Added]
+- **Documentation & Benchmarking Enhancements**:
+  - Enhanced `benchmark_dashboard.html` template in `scripts/run_benchmarks_and_report.py` to capture and display execution metadata (OS, Timestamps, Python/DuckDB versions).
+  - Added explicit architectural explanations in the HTML dashboard detailing where DuckDB wins (Q4, Q8, Q10 Hash Group By operations utilizing AVX-512) vs PQE (Q1, Q2, Q3 raw scanning).
+  - Updated `README.md` with explicit instructions for cloning the repository, building in Release mode, generating scaled datasets, and running the benchmarking harness.
+  - Added `duckdb` Python package to the `README.md` dependencies list.
+- **Repository Maintenance**:
+  - Updated `.gitignore` to safely exclude generated large-scale datasets (`data/scale/` and `*.csv`).
+  - Removed redundant `scripts/benchmark_duckdb.py` standalone script, as its functionality is fully subsumed by the comprehensive `scripts/run_benchmarks_and_report.py` harness.
 - **Hardware AVX2 SIMD Vectorization**:
   - Implemented manual AVX2 hardware intrinsics (`_mm256_loadu_ps`, `_mm256_add_ps`, `_mm256_i32gather_ps`, etc.) in `OmpAggregator` for massive arithmetic speedups (`aggregate_price_simd` and `sum_net_sales_simd`).
   - Added `-mavx2` / `/arch:AVX2` compiler flags and horizontal vector reduction helpers.
