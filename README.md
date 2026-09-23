@@ -90,16 +90,35 @@ Parallel Query Execution Engine/
 
 ### 1. Environmental Prerequisites & Toolchain Verification
 
-Ensure a modern C++ toolchain supporting **C++20** and **OpenMP** is available, along with **CMake (>= 3.20)** and **Python (>= 3.10)**:
+The engine is designed to be cross-platform and requires a modern C++ toolchain supporting **C++20** and **OpenMP**, along with **CMake (>= 3.20)** and **Python (>= 3.10)**. Additionally, for **Intel/AMD CPUs**, the build system automatically detects and enables **AVX2/AVX-512 SIMD vectorization** for accelerated analytical processing.
 
+#### Cross-Platform Installation
+
+**Windows** (via Winget and MSYS2):
 ```powershell
-# Verify CMake installation
+# Install CMake and Python
+winget install Kitware.CMake
+winget install Python.Python.3.11
+
+# Install GCC (MinGW-w64) and Make via MSYS2
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make
+```
+
+**Ubuntu / Debian Linux** (via apt):
+```bash
+sudo apt update
+sudo apt install build-essential cmake python3 python3-pip libomp-dev
+```
+
+**macOS** (via Homebrew):
+```bash
+brew install cmake python gcc libomp
+```
+
+**Verify Toolchain**:
+```bash
 cmake --version
-
-# Verify C++ Compiler (GCC / MinGW-w64 or Clang)
 g++ --version
-
-# Verify Python installation
 python --version
 ```
 
@@ -130,13 +149,17 @@ python scripts/generate_sales_data.py --rows 1000000 --out data/sample/sales_1M.
 
 ### 3. Build & Compilation
 
-Configure and build the project using CMake. The build system will detect OpenMP and compile the static library `pqe_storage` alongside the main engine executable `pqe_engine`:
+Configure and build the project using CMake. The build system will detect OpenMP and compile the static library `pqe_storage` alongside the main engine executable `pqe_engine`. It will also automatically inject `-mavx2` or `-march=native` on Intel/AMD platforms to unlock SIMD vectorization speeds.
 
+**Windows (MinGW Makefiles)**:
 ```powershell
-# Configure build directory (MinGW Makefiles on Windows)
 cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
 
-# Compile all targets
+**Linux / macOS (Unix Makefiles)**:
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 

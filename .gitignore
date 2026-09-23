@@ -61,3 +61,8 @@ Thumbs.db
 data/scale/
 *.csv
 !data/sample/*.csv
+
+# Ignore HTML output reports
+benchmark_dashboard.html
+*.html
+!data/output_sample/*.html
