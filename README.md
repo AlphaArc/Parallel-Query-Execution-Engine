@@ -1,6 +1,6 @@
 # Parallel Query Execution Engine (PQE) for Analytical Workloads
 
-A high-performance, lightweight analytical database query engine developed in **Modern C++ (C++20)**. The engine addresses memory wall bottlenecks and CPU core underutilization by implementing **intra-operator multi-core CPU parallelism** using **morsel-driven dynamic scheduling** (OpenMP), **zero-copy memory-mapped file ingestion (POSIX mmap / Win32 MapViewOfFile)**, and **cache-friendly contiguous columnar memory layouts (`std::vector<T>`)**.
+A high-performance, lightweight analytical database query engine developed in **Modern C++ (C++20)**. The engine addresses memory wall bottlenecks and CPU core underutilization by implementing **intra-operator multi-core CPU parallelism** using **morsel-driven dynamic scheduling** (OpenMP), **zero-copy memory-mapped file ingestion (POSIX mmap / Win32 MapViewOfFile)**, **cache-friendly contiguous columnar memory layouts (`std::vector<T>`)**, and **dynamic SIMD vectorization (AVX2 & ARM NEON)**.
 
 ---
 

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### [Added]
+- **Dynamic Multi-Architecture SIMD Vectorization**:
+  - Expanded SIMD layer to dynamically support both x86/x64 **AVX2** (`__m256`) and ARM **NEON** (`float32x4_t`) architectures using `#ifdef` branching.
+  - Developed cross-platform CMake detection for compiler SIMD flags using `CheckCXXCompilerFlag`.
+  - Updated telemetry pipeline to dynamically query and log the active SIMD architecture (e.g., `(AVX2)`, `(NEON)`).
+  - Python HTML Dashboard dynamically parses architecture output and updates table headers to `PQE Latency (SIMD <ARCH>)`.
 - **Documentation & Benchmarking Enhancements**:
   - Enhanced `benchmark_dashboard.html` template in `scripts/run_benchmarks_and_report.py` to capture and display execution metadata (OS, Timestamps, Python/DuckDB versions).
   - Added explicit architectural explanations in the HTML dashboard detailing where DuckDB wins (Q4, Q8, Q10 Hash Group By operations utilizing AVX-512) vs PQE (Q1, Q2, Q3 raw scanning).
