@@ -4,9 +4,8 @@
 #include "pqe/layer4_concurrency/atomic_accumulator.hpp"
 
 #include <omp.h>
+#ifdef __AVX2__
 #include <immintrin.h>
-#include <algorithm>
-#include <limits>
 
 namespace {
     inline float hsum_ps(__m256 v) {
@@ -38,10 +37,28 @@ namespace {
         __m128 shuf = _mm_movehdup_ps(vlow);
         __m128 maxs = _mm_max_ps(vlow, shuf);
         shuf = _mm_movehl_ps(shuf, maxs);
-        maxs = _mm_max_ss(maxs, shuf);
         return _mm_cvtss_f32(maxs);
     }
 }
+#elif defined(__ARM_NEON)
+#include <arm_neon.h>
+
+namespace {
+    inline float hsum_ps(float32x4_t v) {
+        return vgetq_lane_f32(v, 0) + vgetq_lane_f32(v, 1) + vgetq_lane_f32(v, 2) + vgetq_lane_f32(v, 3);
+    }
+    inline float hmin_ps(float32x4_t v) {
+        float m1 = std::min(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1));
+        float m2 = std::min(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3));
+        return std::min(m1, m2);
+    }
+    inline float hmax_ps(float32x4_t v) {
+        float m1 = std::max(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1));
+        float m2 = std::max(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3));
+        return std::max(m1, m2);
+    }
+}
+#endif
 #include <algorithm>
 #include <limits>
 
@@ -250,10 +267,21 @@ namespace pqe::execution::parallel {
     }
 
     // =========================================================================
-    // AVX2 HARDWARE SIMD VECTORIZATION IMPLEMENTATIONS
+    // HARDWARE SIMD VECTORIZATION IMPLEMENTATIONS
     // =========================================================================
 
+    std::string_view OmpAggregator::get_simd_architecture_name() noexcept {
+#ifdef __AVX2__
+        return "AVX2";
+#elif defined(__ARM_NEON)
+        return "NEON";
+#else
+        return "NONE";
+#endif
+    }
+
     ScalarAggregateResult OmpAggregator::aggregate_price_simd() const noexcept {
+#ifdef __AVX2__
         const auto prices = table_.prices();
         const std::size_t total_rows = table_.row_count();
         
@@ -313,9 +341,73 @@ namespace pqe::execution::parallel {
         res.min = global_min.load();
         res.max = global_max.load();
         return res;
+#elif defined(__ARM_NEON)
+        const auto prices = table_.prices();
+        const std::size_t total_rows = table_.row_count();
+        
+        concurrency::AtomicAccumulator<std::size_t> total_count(0);
+        concurrency::AtomicAccumulator<double> total_sum(0.0);
+        concurrency::AtomicAccumulator<double> global_min(std::numeric_limits<double>::infinity());
+        concurrency::AtomicAccumulator<double> global_max(-std::numeric_limits<double>::infinity());
+
+        #pragma omp parallel
+        {
+            std::size_t local_count = 0;
+            double local_sum = 0.0;
+            double local_min = std::numeric_limits<double>::infinity();
+            double local_max = -std::numeric_limits<double>::infinity();
+
+            float32x4_t v_sum = vdupq_n_f32(0.0f);
+            float32x4_t v_min = vdupq_n_f32(std::numeric_limits<float>::infinity());
+            float32x4_t v_max = vdupq_n_f32(-std::numeric_limits<float>::infinity());
+
+            #pragma omp for schedule(static)
+            for (std::int64_t i = 0; i < static_cast<std::int64_t>(total_rows); i += 4) {
+                if (i + 4 <= static_cast<std::int64_t>(total_rows)) {
+                    float32x4_t v_prices = vld1q_f32(&prices[i]);
+                    v_sum = vaddq_f32(v_sum, v_prices);
+                    v_min = vminq_f32(v_min, v_prices);
+                    v_max = vmaxq_f32(v_max, v_prices);
+                    local_count += 4;
+                } else {
+                    for (std::size_t j = i; j < total_rows; ++j) {
+                        float p = prices[j];
+                        local_sum += p;
+                        if (p < local_min) local_min = p;
+                        if (p > local_max) local_max = p;
+                        local_count++;
+                    }
+                }
+            }
+            
+            local_sum += static_cast<double>(hsum_ps(v_sum));
+            
+            float f_min = hmin_ps(v_min);
+            if (f_min < local_min) local_min = static_cast<double>(f_min);
+            
+            float f_max = hmax_ps(v_max);
+            if (f_max > local_max) local_max = static_cast<double>(f_max);
+
+            total_count.add(local_count);
+            total_sum.add(local_sum);
+            global_min.update_min(local_min);
+            global_max.update_max(local_max);
+        }
+
+        ScalarAggregateResult res;
+        res.count = total_count.load();
+        res.sum = total_sum.load();
+        res.avg = (res.count > 0) ? (res.sum / static_cast<double>(res.count)) : 0.0;
+        res.min = global_min.load();
+        res.max = global_max.load();
+        return res;
+#else
+        return aggregate_price();
+#endif
     }
 
     ScalarAggregateResult OmpAggregator::aggregate_price_simd(const std::vector<row_id_t>& selection) const noexcept {
+#ifdef __AVX2__
         const auto prices = table_.prices();
         const std::size_t sel_size = selection.size();
 
@@ -376,9 +468,78 @@ namespace pqe::execution::parallel {
         res.min = global_min.load();
         res.max = global_max.load();
         return res;
+#elif defined(__ARM_NEON)
+        const auto prices = table_.prices();
+        const std::size_t sel_size = selection.size();
+
+        concurrency::AtomicAccumulator<std::size_t> total_count(0);
+        concurrency::AtomicAccumulator<double> total_sum(0.0);
+        concurrency::AtomicAccumulator<double> global_min(std::numeric_limits<double>::infinity());
+        concurrency::AtomicAccumulator<double> global_max(-std::numeric_limits<double>::infinity());
+
+        #pragma omp parallel
+        {
+            std::size_t local_count = 0;
+            double local_sum = 0.0;
+            double local_min = std::numeric_limits<double>::infinity();
+            double local_max = -std::numeric_limits<double>::infinity();
+
+            float32x4_t v_sum = vdupq_n_f32(0.0f);
+            float32x4_t v_min = vdupq_n_f32(std::numeric_limits<float>::infinity());
+            float32x4_t v_max = vdupq_n_f32(-std::numeric_limits<float>::infinity());
+
+            #pragma omp for schedule(static)
+            for (std::int64_t i = 0; i < static_cast<std::int64_t>(sel_size); i += 4) {
+                if (i + 4 <= static_cast<std::int64_t>(sel_size)) {
+                    float gather[4] = {
+                        prices[selection[i]],
+                        prices[selection[i+1]],
+                        prices[selection[i+2]],
+                        prices[selection[i+3]]
+                    };
+                    float32x4_t v_prices = vld1q_f32(gather);
+
+                    v_sum = vaddq_f32(v_sum, v_prices);
+                    v_min = vminq_f32(v_min, v_prices);
+                    v_max = vmaxq_f32(v_max, v_prices);
+                    local_count += 4;
+                } else {
+                    for (std::size_t j = i; j < sel_size; ++j) {
+                        float p = prices[selection[j]];
+                        local_sum += p;
+                        if (p < local_min) local_min = p;
+                        if (p > local_max) local_max = p;
+                        local_count++;
+                    }
+                }
+            }
+
+            local_sum += static_cast<double>(hsum_ps(v_sum));
+            float f_min = hmin_ps(v_min);
+            if (f_min < local_min) local_min = static_cast<double>(f_min);
+            float f_max = hmax_ps(v_max);
+            if (f_max > local_max) local_max = static_cast<double>(f_max);
+
+            total_count.add(local_count);
+            total_sum.add(local_sum);
+            global_min.update_min(local_min);
+            global_max.update_max(local_max);
+        }
+
+        ScalarAggregateResult res;
+        res.count = total_count.load();
+        res.sum = total_sum.load();
+        res.avg = (res.count > 0) ? (res.sum / static_cast<double>(res.count)) : 0.0;
+        res.min = global_min.load();
+        res.max = global_max.load();
+        return res;
+#else
+        return aggregate_price(selection);
+#endif
     }
 
     double OmpAggregator::sum_net_sales_simd() const noexcept {
+#ifdef __AVX2__
         const auto prices = table_.prices();
         const auto discounts = table_.discounts();
         const auto qty = table_.quantities();
@@ -416,9 +577,57 @@ namespace pqe::execution::parallel {
             global_sum.add(local_sum);
         }
         return global_sum.load();
+#elif defined(__ARM_NEON)
+        const auto prices = table_.prices();
+        const auto discounts = table_.discounts();
+        const auto qty = table_.quantities();
+        const std::size_t total_rows = table_.row_count();
+        
+        concurrency::AtomicAccumulator<double> global_sum(0.0);
+
+        #pragma omp parallel
+        {
+            double local_sum = 0.0;
+            float32x4_t v_sum = vdupq_n_f32(0.0f);
+            float32x4_t v_ones = vdupq_n_f32(1.0f);
+
+            #pragma omp for schedule(static)
+            for (std::int64_t i = 0; i < static_cast<std::int64_t>(total_rows); i += 4) {
+                if (i + 4 <= static_cast<std::int64_t>(total_rows)) {
+                    float32x4_t v_p = vld1q_f32(&prices[i]);
+                    float32x4_t v_d = vld1q_f32(&discounts[i]);
+                    
+                    float q_gather[4] = {
+                        static_cast<float>(qty[i]),
+                        static_cast<float>(qty[i+1]),
+                        static_cast<float>(qty[i+2]),
+                        static_cast<float>(qty[i+3])
+                    };
+                    float32x4_t v_q = vld1q_f32(q_gather);
+                    
+                    float32x4_t v_disc = vsubq_f32(v_ones, v_d);
+                    float32x4_t v_prod1 = vmulq_f32(v_p, v_disc);
+                    float32x4_t v_sales = vmulq_f32(v_prod1, v_q);
+                    
+                    v_sum = vaddq_f32(v_sum, v_sales);
+                } else {
+                    for (std::size_t j = i; j < total_rows; ++j) {
+                        local_sum += static_cast<double>(prices[j]) * (1.0 - static_cast<double>(discounts[j])) * static_cast<double>(qty[j]);
+                    }
+                }
+            }
+            
+            local_sum += static_cast<double>(hsum_ps(v_sum));
+            global_sum.add(local_sum);
+        }
+        return global_sum.load();
+#else
+        return sum_net_sales();
+#endif
     }
 
     double OmpAggregator::sum_net_sales_simd(const std::vector<row_id_t>& selection) const noexcept {
+#ifdef __AVX2__
         const auto prices = table_.prices();
         const auto discounts = table_.discounts();
         const auto qty = table_.quantities();
@@ -458,6 +667,50 @@ namespace pqe::execution::parallel {
             global_sum.add(local_sum);
         }
         return global_sum.load();
+#elif defined(__ARM_NEON)
+        const auto prices = table_.prices();
+        const auto discounts = table_.discounts();
+        const auto qty = table_.quantities();
+        const std::size_t sel_size = selection.size();
+        
+        concurrency::AtomicAccumulator<double> global_sum(0.0);
+
+        #pragma omp parallel
+        {
+            double local_sum = 0.0;
+            float32x4_t v_sum = vdupq_n_f32(0.0f);
+            float32x4_t v_ones = vdupq_n_f32(1.0f);
+
+            #pragma omp for schedule(static)
+            for (std::int64_t i = 0; i < static_cast<std::int64_t>(sel_size); i += 4) {
+                if (i + 4 <= static_cast<std::int64_t>(sel_size)) {
+                    float p_gather[4] = { prices[selection[i]], prices[selection[i+1]], prices[selection[i+2]], prices[selection[i+3]] };
+                    float d_gather[4] = { discounts[selection[i]], discounts[selection[i+1]], discounts[selection[i+2]], discounts[selection[i+3]] };
+                    float q_gather[4] = { static_cast<float>(qty[selection[i]]), static_cast<float>(qty[selection[i+1]]), static_cast<float>(qty[selection[i+2]]), static_cast<float>(qty[selection[i+3]]) };
+                    
+                    float32x4_t v_p = vld1q_f32(p_gather);
+                    float32x4_t v_d = vld1q_f32(d_gather);
+                    float32x4_t v_q = vld1q_f32(q_gather);
+                    
+                    float32x4_t v_disc = vsubq_f32(v_ones, v_d);
+                    float32x4_t v_prod1 = vmulq_f32(v_p, v_disc);
+                    float32x4_t v_sales = vmulq_f32(v_prod1, v_q);
+                    
+                    v_sum = vaddq_f32(v_sum, v_sales);
+                } else {
+                    for (std::size_t j = i; j < sel_size; ++j) {
+                        row_id_t r = selection[j];
+                        local_sum += static_cast<double>(prices[r]) * (1.0 - static_cast<double>(discounts[r])) * static_cast<double>(qty[r]);
+                    }
+                }
+            }
+            local_sum += static_cast<double>(hsum_ps(v_sum));
+            global_sum.add(local_sum);
+        }
+        return global_sum.load();
+#else
+        return sum_net_sales(selection);
+#endif
     }
 
 } // namespace pqe::execution::parallel

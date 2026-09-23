@@ -32,8 +32,15 @@ endif()
 option(USE_SANITIZERS "Enable memory safety sanitizers (ASan, UBSan)" OFF)
 set(PQE_WARNING_FLAGS "")
 
+include(CheckCXXCompilerFlag)
+
 if(MSVC)
-    set(PQE_WARNING_FLAGS /W4 /permissive- /arch:AVX2)
+    set(PQE_WARNING_FLAGS /W4 /permissive-)
+    check_cxx_compiler_flag("/arch:AVX2" COMPILER_SUPPORTS_AVX2_MSVC)
+    if(COMPILER_SUPPORTS_AVX2_MSVC)
+        list(APPEND PQE_WARNING_FLAGS /arch:AVX2)
+    endif()
+    
     if(USE_SANITIZERS)
         list(APPEND PQE_WARNING_FLAGS /fsanitize=address)
     endif()
@@ -44,9 +51,18 @@ else()
         -Wpedantic 
         -Wshadow 
         -Wunused
-        -mavx2
-        -mstackrealign
     )
+    
+    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+    if(COMPILER_SUPPORTS_AVX2)
+        list(APPEND PQE_WARNING_FLAGS -mavx2)
+    endif()
+    
+    check_cxx_compiler_flag("-mstackrealign" COMPILER_SUPPORTS_STACKREALIGN)
+    if(COMPILER_SUPPORTS_STACKREALIGN)
+        list(APPEND PQE_WARNING_FLAGS -mstackrealign)
+    endif()
+
     if(USE_SANITIZERS)
         list(APPEND PQE_WARNING_FLAGS -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")

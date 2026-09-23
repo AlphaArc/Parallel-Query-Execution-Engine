@@ -51,8 +51,13 @@ def run_pqe_engine(data_path, threads):
             match = re.search(r'(Q\d+):', line)
             if match:
                 current_q = match.group(1)
-        elif "[TELEMETRY - SIMD SPEEDUP]" in line:
+        elif "[TELEMETRY - SIMD SPEEDUP" in line:
             is_simd = True
+            
+            arch_match = re.search(r'\[TELEMETRY - SIMD SPEEDUP \((.*?)\)\]', line)
+            if arch_match:
+                simd_metrics['arch'] = arch_match.group(1)
+                
             match = re.search(r'(Q\d+):', line)
             if match:
                 current_q = match.group(1)
@@ -160,6 +165,9 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
         "Q10": ("Single-Column Scalar Reduction", "SELECT SUM(Quantity) FROM sales WHERE CategoryID = 20;", "Direct tight loop scalar processing", "Complex scalar reductions using AVX-512")
     }
     
+    simd_arch = simd.get('arch', 'Unknown')
+    simd_header = f"PQE Latency (SIMD {simd_arch})" if simd_arch != "NONE" else "PQE Latency (SIMD)"
+    
     rows_html = ""
     for i in range(1, 11):
         q = f"Q{i}"
@@ -264,7 +272,7 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
                             <th class="py-4 px-6">Query <span class="text-gray-500 lowercase font-normal">(Hover for SQL)</span></th>
                             <th class="py-4 px-6">Description</th>
                             <th class="py-4 px-6">PQE Latency (TN)</th>
-                            <th class="py-4 px-6 text-purple-300 bg-gray-900/50">PQE Latency (SIMD AVX)</th>
+                            <th class="py-4 px-6 text-purple-300 bg-gray-900/50">{simd_header}</th>
                             <th class="py-4 px-6">DuckDB Latency</th>
                             <th class="py-4 px-6">Winner</th>
                             <th class="py-4 px-6">Speedup</th>
@@ -284,7 +292,7 @@ def generate_html(pqe, duck, simd, data_path, threads, output_html="benchmark_da
                     <ul class="list-disc list-inside text-gray-400 space-y-1 text-sm">
                         <li><strong>Zero-Overhead Filtering:</strong> Predicates compiled directly into CPU cache loops (No dynamic planning).</li>
                         <li><strong>Morsel-Driven Parallelism:</strong> Lock-free work stealing guarantees perfect CPU core utilization.</li>
-                        <li><strong>SIMD Acceleration:</strong> Hardware AVX2 instructions compute 8 items per cycle for arithmetic ops.</li>
+                        <li><strong>SIMD Acceleration:</strong> Hardware {simd_arch} instructions dynamically used for vectorized execution.</li>
                     </ul>
                 </div>
                 <div class="bg-gray-900 p-6 rounded-xl border border-gray-700">

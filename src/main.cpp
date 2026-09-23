@@ -160,6 +160,8 @@ namespace {
         pqe::execution::parallel::OmpFilter filter(table);
         pqe::execution::parallel::OmpAggregator agg(table);
         pqe::execution::parallel::OmpGroupBy group_by(table);
+        
+        auto simd_arch = pqe::execution::parallel::OmpAggregator::get_simd_architecture_name();
 
         {
             pqe::telemetry::ScopedTimer timer("Q1: Full Table Scan & COUNT(*)", total_rows);
@@ -186,10 +188,10 @@ namespace {
             speedup.print_report();
 
             // Hardware SIMD Benchmark
-            pqe::telemetry::ScopedTimer simd_timer("Q3: SIMD AVX2 Filter + Aggregate Price", total_rows);
+            pqe::telemetry::ScopedTimer simd_timer("Q3: SIMD Filter + Aggregate Price", total_rows);
             auto simd_result = agg.aggregate_price_simd(selection);
             auto simd_metrics = simd_timer.stop(simd_result.count);
-            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q3: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+            std::cout << "[TELEMETRY - SIMD SPEEDUP (" << simd_arch << ")] Q3: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
         }
 
         {
@@ -210,11 +212,11 @@ namespace {
             speedup.print_report();
 
             // Hardware SIMD Benchmark
-            pqe::telemetry::ScopedTimer simd_timer("Q5: SIMD AVX2 Filter + Aggregate Net Sales", total_rows);
+            pqe::telemetry::ScopedTimer simd_timer("Q5: SIMD Filter + Aggregate Net Sales", total_rows);
             auto simd_result = agg.sum_net_sales_simd(selection);
             (void)simd_result;
             auto simd_metrics = simd_timer.stop(selection.size());
-            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q5: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+            std::cout << "[TELEMETRY - SIMD SPEEDUP (" << simd_arch << ")] Q5: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
         }
 
         {
@@ -235,10 +237,10 @@ namespace {
             speedup.print_report();
 
             // Hardware SIMD Benchmark
-            pqe::telemetry::ScopedTimer simd_timer("Q7: SIMD AVX2 Multi-Predicate + Aggregate Price", total_rows);
+            pqe::telemetry::ScopedTimer simd_timer("Q7: SIMD Multi-Predicate + Aggregate Price", total_rows);
             auto simd_result = agg.aggregate_price_simd(selection);
             auto simd_metrics = simd_timer.stop(simd_result.count);
-            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q7: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+            std::cout << "[TELEMETRY - SIMD SPEEDUP (" << simd_arch << ")] Q7: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
         }
 
         {
@@ -259,11 +261,11 @@ namespace {
             speedup.print_report();
 
             // Hardware SIMD Benchmark
-            pqe::telemetry::ScopedTimer simd_timer("Q9: SIMD AVX2 Full Table Aggregate (Net Sales)", total_rows);
+            pqe::telemetry::ScopedTimer simd_timer("Q9: SIMD Full Table Aggregate (Net Sales)", total_rows);
             auto simd_result = agg.sum_net_sales_simd();
             (void)simd_result;
             auto simd_metrics = simd_timer.stop(total_rows);
-            std::cout << "[TELEMETRY - SIMD SPEEDUP] Q9: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
+            std::cout << "[TELEMETRY - SIMD SPEEDUP (" << simd_arch << ")] Q9: -> Par Time (TN): " << simd_metrics.duration_milliseconds << " ms\n";
         }
 
         {
